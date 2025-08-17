@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use tauri_plugin_dialog::DialogExt;
 
 mod sti;
 
@@ -54,9 +56,8 @@ pub struct DirectoryItem {
     pub name: String,
     pub path: String,
     pub is_directory: bool,
-    pub size: Option<u64>,
-    pub modified: Option<String>,
     pub is_sti_file: bool,
+    pub contains_sti_files: bool, // New field for intelligent filtering
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -136,10 +137,27 @@ async fn save_sti_file(_file_path: String, _sti_data: serde_json::Value) -> Resu
 }
 
 #[tauri::command]
-async fn select_directory() -> Result<Option<String>, String> {
-    // For now, return None as file dialog integration needs proper setup
-    // In production, this would use Tauri's dialog plugin
-    Ok(None)
+async fn select_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use std::sync::mpsc;
+    
+    let (tx, rx) = mpsc::channel();
+    
+    app.dialog()
+        .file()
+        .set_title("Select Directory Containing STI Files")
+        .pick_folder(move |result| {
+            let _ = tx.send(result);
+        });
+    
+    match rx.recv() {
+        Ok(Some(path)) => {
+            // Convert FilePath to PathBuf, then to string
+            let path_buf = path.as_path().ok_or("Invalid path")?;
+            Ok(Some(path_buf.to_string_lossy().to_string()))
+        },
+        Ok(None) => Ok(None),
+        Err(_) => Err("Failed to receive dialog result".to_string()),
+    }
 }
 
 #[tauri::command]
@@ -154,19 +172,23 @@ async fn browse_directory(directory_path: String) -> Result<DirectoryContents, S
         return Err("Path is not a directory".to_string());
     }
     
-    let mut items = Vec::new();
+    let mut directories = Vec::new();
+    let mut sti_files = Vec::new();
     let mut sti_count = 0;
     
+    // Read directory entries - optimized single pass
     let entries = fs::read_dir(path)
         .map_err(|e| format!("Failed to read directory: {}", e))?;
     
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let entry_path = entry.path();
-        let file_name = entry_path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("Unknown")
-            .to_string();
+        
+        // Get filename once
+        let file_name = match entry_path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name,
+            None => continue,
+        };
         
         // Skip hidden files/directories
         if file_name.starts_with('.') {
@@ -174,56 +196,38 @@ async fn browse_directory(directory_path: String) -> Result<DirectoryContents, S
         }
         
         let is_directory = entry_path.is_dir();
-        let is_sti_file = !is_directory &&
-            file_name.to_lowercase().ends_with(".sti");
         
-        if is_sti_file {
+        if is_directory {
+            // Only check if directory contains STI files when needed, not recursively
+            let contains_sti_files = directory_contains_sti_files(&entry_path);
+            if contains_sti_files {
+                directories.push(DirectoryItem {
+                    name: file_name.to_string(),
+                    path: entry_path.to_string_lossy().to_string(),
+                    is_directory: true,
+                    is_sti_file: false,
+                    contains_sti_files: true,
+                });
+            }
+        } else if file_name.to_lowercase().ends_with(".sti") {
             sti_count += 1;
-        }
-
-        // Skip non STI files
-        if !file_name.to_lowercase().ends_with(".sti") && !is_directory {
-            continue;
-        }
-        
-        let size = if is_directory {
-            None
-        } else {
-            entry.metadata().ok().map(|m| m.len())
-        };
-        
-        let modified = entry.metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|time| {
-                use std::time::{SystemTime, UNIX_EPOCH};
-                time.duration_since(UNIX_EPOCH)
-                    .ok()
-                    .map(|d| d.as_secs())
-                    .map(|secs| {
-                        // Simple timestamp format
-                        format!("{}", secs)
-                    })
+            sti_files.push(DirectoryItem {
+                name: file_name.to_string(),
+                path: entry_path.to_string_lossy().to_string(),
+                is_directory: false,
+                is_sti_file: true,
+                contains_sti_files: false,
             });
-        
-        items.push(DirectoryItem {
-            name: file_name,
-            path: entry_path.to_string_lossy().to_string(),
-            is_directory,
-            size,
-            modified,
-            is_sti_file,
-        });
+        }
     }
     
-    // Sort items: directories first, then files, both alphabetically
-    items.sort_by(|a, b| {
-        match (a.is_directory, b.is_directory) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
-    });
+    // Simple sorting: directories first, then STI files, both by name
+    directories.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    sti_files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    
+    // Combine directories and files
+    let mut items = directories;
+    items.extend(sti_files);
     
     let parent_path = path.parent()
         .map(|p| p.to_string_lossy().to_string());
@@ -234,6 +238,30 @@ async fn browse_directory(directory_path: String) -> Result<DirectoryContents, S
         items,
         sti_count,
     })
+}
+
+// Fast, non-recursive check if a directory contains STI files directly
+fn directory_contains_sti_files(dir_path: &Path) -> bool {
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+                    if extension.to_lowercase() == "sti" {
+                        return true;
+                    }
+                }
+            } else if path.is_dir() {
+                // Check one level deep only to avoid performance issues
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if !name.starts_with('.') && directory_contains_sti_files(&path) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 #[tauri::command]
@@ -273,6 +301,7 @@ fn scan_directory_for_sti(dir: &Path, sti_files: &mut Vec<String>, recursive: bo
     
     Ok(())
 }
+
 
 #[tauri::command]
 async fn export_image(file_path: String, image_index: usize, output_path: String, format: String) -> Result<(), String> {
@@ -338,6 +367,8 @@ async fn export_image(file_path: String, image_index: usize, output_path: String
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             open_sti_file,
             get_sti_image,
