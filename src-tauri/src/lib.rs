@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 mod sti;
@@ -47,6 +47,24 @@ pub struct StiImageData {
     pub height: u16,
     pub data: Vec<u8>,
     pub palette: Option<Vec<[u8; 3]>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DirectoryItem {
+    pub name: String,
+    pub path: String,
+    pub is_directory: bool,
+    pub size: Option<u64>,
+    pub modified: Option<String>,
+    pub is_sti_file: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DirectoryContents {
+    pub current_path: String,
+    pub parent_path: Option<String>,
+    pub items: Vec<DirectoryItem>,
+    pub sti_count: usize,
 }
 
 // Tauri commands
@@ -118,6 +136,145 @@ async fn save_sti_file(_file_path: String, _sti_data: serde_json::Value) -> Resu
 }
 
 #[tauri::command]
+async fn select_directory() -> Result<Option<String>, String> {
+    // For now, return None as file dialog integration needs proper setup
+    // In production, this would use Tauri's dialog plugin
+    Ok(None)
+}
+
+#[tauri::command]
+async fn browse_directory(directory_path: String) -> Result<DirectoryContents, String> {
+    let path = Path::new(&directory_path);
+    
+    if !path.exists() {
+        return Err("Directory does not exist".to_string());
+    }
+    
+    if !path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+    
+    let mut items = Vec::new();
+    let mut sti_count = 0;
+    
+    let entries = fs::read_dir(path)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let entry_path = entry.path();
+        let file_name = entry_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        
+        // Skip hidden files/directories
+        if file_name.starts_with('.') {
+            continue;
+        }
+        
+        let is_directory = entry_path.is_dir();
+        let is_sti_file = !is_directory &&
+            file_name.to_lowercase().ends_with(".sti");
+        
+        if is_sti_file {
+            sti_count += 1;
+        }
+
+        // Skip non STI files
+        if !file_name.to_lowercase().ends_with(".sti") && !is_directory {
+            continue;
+        }
+        
+        let size = if is_directory {
+            None
+        } else {
+            entry.metadata().ok().map(|m| m.len())
+        };
+        
+        let modified = entry.metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|time| {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                time.duration_since(UNIX_EPOCH)
+                    .ok()
+                    .map(|d| d.as_secs())
+                    .map(|secs| {
+                        // Simple timestamp format
+                        format!("{}", secs)
+                    })
+            });
+        
+        items.push(DirectoryItem {
+            name: file_name,
+            path: entry_path.to_string_lossy().to_string(),
+            is_directory,
+            size,
+            modified,
+            is_sti_file,
+        });
+    }
+    
+    // Sort items: directories first, then files, both alphabetically
+    items.sort_by(|a, b| {
+        match (a.is_directory, b.is_directory) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+    
+    let parent_path = path.parent()
+        .map(|p| p.to_string_lossy().to_string());
+    
+    Ok(DirectoryContents {
+        current_path: directory_path,
+        parent_path,
+        items,
+        sti_count,
+    })
+}
+
+#[tauri::command]
+async fn scan_for_sti_files(directory_path: String, recursive: bool) -> Result<Vec<String>, String> {
+    let mut sti_files = Vec::new();
+    scan_directory_for_sti(&Path::new(&directory_path), &mut sti_files, recursive)?;
+    Ok(sti_files)
+}
+
+fn scan_directory_for_sti(dir: &Path, sti_files: &mut Vec<String>, recursive: bool) -> Result<(), String> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
+    
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+        
+        if path.is_dir() && recursive {
+            // Skip hidden directories
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if !name.starts_with('.') {
+                    scan_directory_for_sti(&path, sti_files, recursive)?;
+                }
+            }
+        } else if path.is_file() {
+            if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+                if extension.to_lowercase() == "sti" {
+                    sti_files.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
 async fn export_image(file_path: String, image_index: usize, output_path: String, format: String) -> Result<(), String> {
     let path = Path::new(&file_path);
     let file_data = fs::read(path)
@@ -186,7 +343,10 @@ pub fn run() {
             get_sti_image,
             get_sti_metadata,
             save_sti_file,
-            export_image
+            export_image,
+            select_directory,
+            browse_directory,
+            scan_for_sti_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
