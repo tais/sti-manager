@@ -49,9 +49,8 @@ export interface DirectoryItem {
   name: string;
   path: string;
   is_directory: boolean;
-  size?: number;
-  modified?: string;
   is_sti_file: boolean;
+  contains_sti_files: boolean; // New field for intelligent filtering
 }
 
 export interface DirectoryContents {

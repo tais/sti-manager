@@ -9,6 +9,9 @@ interface ImageViewerProps {
   onImageIndexChange: (index: number) => void;
 }
 
+// Global zoom level that persists across image changes
+let persistentZoom = 2;
+
 const ImageViewer: React.FC<ImageViewerProps> = ({
   imageData,
   fileInfo,
@@ -16,10 +19,15 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   onImageIndexChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [zoom, setZoom] = useState(2);
+  const [zoom, setZoom] = useState(persistentZoom);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+  // Update the persistent zoom whenever local zoom changes
+  useEffect(() => {
+    persistentZoom = zoom;
+  }, [zoom]);
 
   useEffect(() => {
     drawImage();
@@ -117,21 +125,28 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(1, Math.min(100, prev * zoomFactor)));
+    const newZoom = Math.max(0.1, Math.min(100, zoom * zoomFactor));
+    setZoom(newZoom);
+    persistentZoom = newZoom;
   };
 
   const resetView = () => {
     setZoom(1);
+    persistentZoom = 1;
     setPan({ x: 0, y: 0 });
   };
 
   const zoomIn = () => {
-    setZoom(zoom*2);
+    const newZoom = Math.min(100, zoom * 2);
+    setZoom(newZoom);
+    persistentZoom = newZoom;
     setPan({ x: 0, y: 0 });
   };
 
   const zoomOut = () => {
-    setZoom(zoom/2);
+    const newZoom = Math.max(0.1, zoom / 2);
+    setZoom(newZoom);
+    persistentZoom = newZoom;
     setPan({ x: 0, y: 0 });
   };
 
@@ -144,6 +159,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
     const scale = Math.min(scaleX, scaleY) * 0.9; // 90% to leave some margin
     
     setZoom(scale);
+    persistentZoom = scale;
     setPan({ x: 0, y: 0 });
   };
 

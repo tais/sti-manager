@@ -81,12 +81,86 @@ async fn open_sti_file(file_path: String) -> Result<StiFileInfo, String> {
         .map_err(|e| format!("Failed to read file: {}", e))?;
     
     let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+        .map_err(|e| format!("Failed to parse STI file '{}': {}", file_path, e))?;
     
     let mut info = StiFileInfo::from(&sti_file);
     info.file_size = file_data.len() as u64;
     
     Ok(info)
+}
+
+#[tauri::command]
+async fn debug_sti_file(file_path: String) -> Result<String, String> {
+    let path = Path::new(&file_path);
+    
+    if !path.exists() {
+        return Err("File does not exist".to_string());
+    }
+    
+    let file_data = fs::read(path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+    
+    if file_data.len() < 64 {
+        return Ok(format!("File too small: {} bytes (need at least 64 for header)", file_data.len()));
+    }
+    
+    // Read first 64 bytes as header
+    let signature = &file_data[0..4];
+    let original_size = u32::from_le_bytes([file_data[4], file_data[5], file_data[6], file_data[7]]);
+    let compressed_size = u32::from_le_bytes([file_data[8], file_data[9], file_data[10], file_data[11]]);
+    let transparent_color = u32::from_le_bytes([file_data[12], file_data[13], file_data[14], file_data[15]]);
+    let flags_value = u32::from_le_bytes([file_data[16], file_data[17], file_data[18], file_data[19]]);
+    let height = u16::from_le_bytes([file_data[20], file_data[21]]);
+    let width = u16::from_le_bytes([file_data[22], file_data[23]]);
+    
+    let flags = sti::types::StiFlags::from(flags_value);
+    
+    let mut debug_info = format!(
+        "STI Debug Information for: {}\n\
+         File size: {} bytes\n\
+         Signature: {:?} ({})\n\
+         Original size: {}\n\
+         Compressed size: {}\n\
+         Transparent color: {}\n\
+         Flags value: 0x{:08X}\n\
+         Flags breakdown:\n\
+         - Transparent: {}\n\
+         - Alpha: {}\n\
+         - RGB (16-bit): {}\n\
+         - Indexed (8-bit): {}\n\
+         - ZLIB compressed: {}\n\
+         - ETRLE compressed: {}\n\
+         Height: {}\n\
+         Width: {}\n",
+        file_path,
+        file_data.len(),
+        signature,
+        String::from_utf8_lossy(signature),
+        original_size,
+        compressed_size,
+        transparent_color,
+        flags_value,
+        flags.transparent,
+        flags.alpha,
+        flags.rgb,
+        flags.indexed,
+        flags.zlib_compressed,
+        flags.etrle_compressed,
+        height,
+        width
+    );
+    
+    // Try to parse and add detailed error info
+    match StiParser::parse(&file_data) {
+        Ok(sti_file) => {
+            debug_info.push_str(&format!("\nParsing: SUCCESS\nImages loaded: {}\n", sti_file.images.len()));
+        }
+        Err(e) => {
+            debug_info.push_str(&format!("\nParsing: FAILED\nError: {}\n", e));
+        }
+    }
+    
+    Ok(debug_info)
 }
 
 #[tauri::command]
@@ -377,7 +451,8 @@ pub fn run() {
             export_image,
             select_directory,
             browse_directory,
-            scan_for_sti_files
+            scan_for_sti_files,
+            debug_sti_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

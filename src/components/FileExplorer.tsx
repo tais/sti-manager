@@ -13,8 +13,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
   const [directoryContents, setDirectoryContents] = useState<DirectoryContents | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stiFiles, setStiFiles] = useState<string[]>([]);
-  const [scanningForSti, setScanningForSti] = useState(false);
 
   const handleSelectRootDirectory = async () => {
     try {
@@ -24,7 +22,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
         setRootDirectory(selectedPath);
         setCurrentPath(selectedPath);
         await loadDirectory(selectedPath);
-        await scanForStiFiles(selectedPath);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select directory');
@@ -46,17 +43,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
     }
   };
 
-  const scanForStiFiles = async (path: string) => {
-    setScanningForSti(true);
-    try {
-      const files = await DirectoryApi.scanForStiFiles(path, true);
-      setStiFiles(files);
-    } catch (err) {
-      console.error('Failed to scan for STI files:', err);
-    } finally {
-      setScanningForSti(false);
-    }
-  };
 
   const handleItemClick = async (item: DirectoryItem) => {
     if (item.is_directory) {
@@ -72,11 +58,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const getRelativePath = (fullPath: string) => {
     if (!rootDirectory) return fullPath;
@@ -84,18 +65,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
       ? fullPath.substring(rootDirectory.length) || '/'
       : fullPath;
   };
-
-  // Auto-select a default directory on mount (for development)
-  useEffect(() => {
-    // For development, we can start with current directory
-    // In production, user will need to select a directory
-    const defaultPath = '.';
-    if (!rootDirectory) {
-      setRootDirectory(defaultPath);
-      setCurrentPath(defaultPath);
-      loadDirectory(defaultPath);
-    }
-  }, []);
 
   return (
     <div className="file-explorer">
@@ -136,12 +105,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
                 <span className="sti-count">
                   {directoryContents.sti_count} STI files in current folder
                 </span>
-                {scanningForSti && <span className="scanning">Scanning...</span>}
-                {!scanningForSti && stiFiles.length > 0 && (
-                  <span className="total-sti">
-                    {stiFiles.length} STI files total
-                  </span>
-                )}
               </div>
             )}
           </div>
@@ -178,11 +141,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
             </div>
             <div className="file-info">
               <div className="file-name">{item.name}</div>
-              {!item.is_directory && item.size && (
-                <div className="file-size">{formatFileSize(item.size)}</div>
-              )}
               {item.is_directory && (
-                <div className="directory-indicator">folder</div>
+                <div className="directory-indicator">
+                  {item.contains_sti_files ? 'folder (contains STI files)' : 'folder'}
+                </div>
               )}
             </div>
             {item.is_sti_file && (
@@ -191,26 +153,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
           </div>
         ))}
       </div>
-      
-      {stiFiles.length > 0 && (
-        <div className="sti-files-summary">
-          <details>
-            <summary>All STI Files ({stiFiles.length})</summary>
-            <div className="sti-files-list">
-              {stiFiles.map((filePath) => (
-                <div
-                  key={filePath}
-                  className="sti-file-item"
-                  onClick={() => onFileSelect(filePath)}
-                  title={filePath}
-                >
-                  🎮 {filePath.split('/').pop() || filePath}
-                </div>
-              ))}
-            </div>
-          </details>
-        </div>
-      )}
     </div>
   );
 };

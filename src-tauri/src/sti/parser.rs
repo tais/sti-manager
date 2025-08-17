@@ -47,12 +47,13 @@ impl StiParser {
         let flags_value = cursor.read_u32::<LittleEndian>()?;
         header.flags = StiFlags::from(flags_value);
         
-        header.height = cursor.read_u16::<LittleEndian>()?;
-        header.width = cursor.read_u16::<LittleEndian>()?;
-        
-        // Read format-specific data (bytes 25-44)
-        if header.flags.rgb {
+        // Width and height are only used for 16-bit files
+        if header.flags.rgb && !header.flags.indexed {
             // 16-bit file format
+            header.height = cursor.read_u16::<LittleEndian>()?;
+            header.width = cursor.read_u16::<LittleEndian>()?;
+            
+            // Read color masks and depths (bytes 25-44)
             header.red_mask = cursor.read_u32::<LittleEndian>()?;
             header.green_mask = cursor.read_u32::<LittleEndian>()?;
             header.blue_mask = cursor.read_u32::<LittleEndian>()?;
@@ -61,8 +62,14 @@ impl StiParser {
             header.green_depth = cursor.read_u8()?;
             header.blue_depth = cursor.read_u8()?;
             header.alpha_depth = cursor.read_u8()?;
-        } else if header.flags.indexed {
-            // 8-bit file format
+        } else if header.flags.indexed && !header.flags.rgb {
+            // 8-bit file format - width/height are NOT in main header
+            header.height = 0; // Will be set from sub-image headers
+            header.width = 0;  // Will be set from sub-image headers
+            
+            // Skip to byte 25 for 8-bit specific data
+            cursor.seek(SeekFrom::Current(4))?; // Skip bytes 21-24
+            
             header.palette_colors = cursor.read_u32::<LittleEndian>()?;
             header.num_images = cursor.read_u16::<LittleEndian>()?;
             header.red_depth = cursor.read_u8()?;
@@ -71,6 +78,10 @@ impl StiParser {
             
             // Skip unused bytes (bytes 34-44)
             cursor.seek(SeekFrom::Current(11))?;
+        } else {
+            return Err(StiError::InvalidFormat(
+                "Invalid STI format flags - must be either RGB or indexed".to_string()
+            ));
         }
         
         // Read remaining header fields (bytes 45-64)
@@ -303,6 +314,7 @@ impl StiParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     
     #[test]
     fn test_header_parsing() {
@@ -318,5 +330,45 @@ mod tests {
         
         assert_eq!(header.signature, [b'S', b'T', b'C', b'I']);
         assert_eq!(header.flags.indexed, true);
+    }
+    
+    #[test]
+    fn test_cryo_corpse_file() {
+        // Test the specific file that's failing
+        let file_path = "../CRYO_CORPSE.STI";
+        
+        if let Ok(file_data) = fs::read(file_path) {
+            println!("File size: {} bytes", file_data.len());
+            
+            // Test header parsing
+            let mut cursor = Cursor::new(file_data.as_slice());
+            match StiParser::parse_header(&mut cursor) {
+                Ok(header) => {
+                    println!("Header parsed successfully!");
+                    println!("Flags: 0x{:08X}", Into::<u32>::into(header.flags));
+                    println!("Is 8-bit: {}", header.flags.indexed && !header.flags.rgb);
+                    println!("Is 16-bit: {}", header.flags.rgb && !header.flags.indexed);
+                    println!("ETRLE compressed: {}", header.flags.etrle_compressed);
+                    println!("Num images: {}", header.num_images);
+                    println!("Palette colors: {}", header.palette_colors);
+                    println!("Width: {}, Height: {}", header.width, header.height);
+                }
+                Err(e) => {
+                    println!("Header parsing failed: {}", e);
+                }
+            }
+            
+            // Test full parsing
+            match StiParser::parse(&file_data) {
+                Ok(sti_file) => {
+                    println!("Full parsing successful! Images: {}", sti_file.images.len());
+                }
+                Err(e) => {
+                    println!("Full parsing failed: {}", e);
+                }
+            }
+        } else {
+            println!("Could not read CRYO_CORPSE.STI file");
+        }
     }
 }
