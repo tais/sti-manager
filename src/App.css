@@ -131,14 +131,15 @@ body {
 }
 
 .welcome-message {
+  margin: 0 auto;
   padding: 40px;
   text-align: center;
-  color: #666;
+  color: #eee;
 }
 
 .welcome-message h2 {
+  text-align: left;
   margin: 0 0 16px 0;
-  color: #333;
 }
 
 .welcome-message p {
@@ -149,13 +150,12 @@ body {
 .file-info {
   max-width: 400px;
   margin: 0 auto;
+  color: #eee;
   text-align: left;
 }
 
 .file-info h3 {
   margin: 0 0 12px 0;
-  color: #333;
-  text-align: center;
 }
 
 .file-info ul {

@@ -45,6 +45,22 @@ export interface StiMetadata {
   app_data_size: number;
 }
 
+export interface DirectoryItem {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  size?: number;
+  modified?: string;
+  is_sti_file: boolean;
+}
+
+export interface DirectoryContents {
+  current_path: string;
+  parent_path?: string;
+  items: DirectoryItem[];
+  sti_count: number;
+}
+
 export interface FileItem {
   name: string;
   path: string;

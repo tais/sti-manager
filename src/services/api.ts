@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { StiFileInfo, StiImageData, StiMetadata } from '../types/sti';
+import { StiFileInfo, StiImageData, StiMetadata, DirectoryContents } from '../types/sti';
 
 export class StiApi {
   static async openStiFile(filePath: string): Promise<StiFileInfo> {
@@ -19,12 +19,26 @@ export class StiApi {
   }
 
   static async exportImage(
-    filePath: string, 
-    imageIndex: number, 
-    outputPath: string, 
+    filePath: string,
+    imageIndex: number,
+    outputPath: string,
     format: string
   ): Promise<void> {
     return await invoke('export_image', { filePath, imageIndex, outputPath, format });
+  }
+}
+
+export class DirectoryApi {
+  static async selectDirectory(): Promise<string | null> {
+    return await invoke('select_directory');
+  }
+
+  static async browseDirectory(directoryPath: string): Promise<DirectoryContents> {
+    return await invoke('browse_directory', { directoryPath });
+  }
+
+  static async scanForStiFiles(directoryPath: string, recursive: boolean = true): Promise<string[]> {
+    return await invoke('scan_for_sti_files', { directoryPath, recursive });
   }
 }
 

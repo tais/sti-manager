@@ -1,79 +1,152 @@
 .file-explorer {
-  width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  border-right: 2px solid #777;
-  background: #333;
+  height: 70%;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .file-explorer-header {
-  padding: 16px;
-  border-bottom: 2px solid #777;
-  background: #444;
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
 }
 
 .file-explorer-header h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+/* Directory Selection */
+.directory-selection {
+  text-align: center;
+}
+
+.select-directory-btn {
+  padding: 0.75rem 1.5rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.select-directory-btn:hover {
+  background-color: #0056b3;
+}
+
+.helper-text {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* Directory Info */
+.directory-info {
+  margin-bottom: 0.5rem;
 }
 
 .path-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #eee;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #666;
 }
 
 .path-bar button {
-  color: #eee;
-  background: #333;
-  border: 1px solid #777;
-  border-radius: 4px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 12px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  min-width: auto;
+  border-radius: 3px;
 }
 
-.path-bar button:hover:not(:disabled) {
-  background: #333;
+.current-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  background-color: #f5f5f5;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid #ddd;
 }
 
-.path-bar button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.change-root-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
 }
 
+.directory-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.sti-count {
+  color: #007bff;
+  font-weight: 500;
+}
+
+.total-sti {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.scanning {
+  color: #ffc107;
+  font-style: italic;
+}
+
+/* File List */
 .file-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 0.5rem;
 }
 
 .file-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  padding: 0;
+  margin: 0;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s ease;
+  user-select: none;
+  position: relative;
 }
 
 .file-item:hover {
-  background: #666;
+  background-color: #f0f0f0;
 }
 
 .file-item.directory {
   font-weight: 500;
 }
 
+.file-item.sti-file {
+  background-color: #f8f9ff;
+  border: 1px solid #e3f2fd;
+}
+
+.file-item.sti-file:hover {
+  background-color: #e3f2fd;
+}
+
 .file-icon {
-  font-size: 16px;
-  width: 20px;
+  font-size: 1.2rem;
+  margin-right: 0.75rem;
+  width: 1.5rem;
   text-align: center;
 }
 
@@ -83,22 +156,224 @@
 }
 
 .file-name {
-  font-size: 13px;
-  color: #fff;
+  font-size: 0.9rem;
+  color: #333;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .file-size {
-  font-size: 11px;
-  color: #ddd;
-  margin-top: 2px;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.directory-indicator {
+  font-size: 0.75rem;
+  color: #666;
+  font-style: italic;
+}
+
+.sti-badge {
+  background-color: #007bff;
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* Error and Loading States */
+.error-message {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.error-message button {
+  background: none;
+  border: none;
+  color: #c33;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+  min-width: auto;
 }
 
 .loading {
   text-align: center;
-  padding: 20px;
-  color: #ddd;
-  font-size: 13px;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
+}
+
+.empty-directory {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-style: italic;
+}
+
+/* STI Files Summary */
+.sti-files-summary {
+  border-top: 1px solid #e0e0e0;
+  background-color: #f9f9ff;
+}
+
+.sti-files-summary details {
+  padding: 0.75rem;
+}
+
+.sti-files-summary summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #007bff;
+  font-size: 0.85rem;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sti-files-summary summary::-webkit-details-marker {
+  display: none;
+}
+
+.sti-files-summary summary::before {
+  content: "▶";
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+.sti-files-summary details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.sti-files-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+}
+
+.sti-file-item {
+  padding: 0.25rem 0.5rem;
+  margin: 0.125rem 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #555;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sti-file-item:hover {
+  background-color: #e3f2fd;
+  color: #007bff;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .file-explorer-header {
+    background-color: #333;
+    border-bottom-color: #555;
+  }
+
+  .file-explorer-header h3 {
+    color: #f6f6f6;
+  }
+
+  .helper-text {
+    color: #aaa;
+  }
+
+  .select-directory-btn {
+    background-color: #0056b3;
+  }
+
+  .select-directory-btn:hover {
+    background-color: #004494;
+  }
+
+  .current-path {
+    background-color: #444;
+    border-color: #666;
+    color: #f6f6f6;
+  }
+
+  .change-root-btn {
+    background-color: #444;
+    border-color: #666;
+    color: #f6f6f6;
+  }
+
+  .directory-stats {
+    color: #aaa;
+  }
+
+  .file-explorer {
+    border-bottom-color: #555;
+  }
+
+  .file-item:hover {
+    background-color: #3a3a3a;
+  }
+
+  .file-item.sti-file {
+    background-color: #1a1a2e;
+    border-color: #2a2a4a;
+  }
+
+  .file-item.sti-file:hover {
+    background-color: #2a2a4a;
+  }
+
+  .file-name {
+    color: #f6f6f6;
+  }
+
+  .file-size, .directory-indicator {
+    color: #aaa;
+  }
+
+  .loading, .empty-directory {
+    color: #aaa;
+  }
+
+  .sti-files-summary {
+    background-color: #2a2a3a;
+    border-top-color: #555;
+  }
+
+  .sti-files-summary summary {
+    color: #64b5f6;
+  }
+
+  .sti-file-item {
+    color: #ccc;
+  }
+
+  .sti-file-item:hover {
+    background-color: #3a3a5a;
+    color: #64b5f6;
+  }
+
+  .error-message {
+    background-color: #3a1a1a;
+    border-color: #6a2a2a;
+    color: #ff6b6b;
+  }
+
+  .error-message button {
+    color: #ff6b6b;
+  }
 }
