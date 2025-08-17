@@ -16,7 +16,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   onImageIndexChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(2);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
@@ -117,7 +117,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(0.1, Math.min(10, prev * zoomFactor)));
+    setZoom(prev => Math.max(1, Math.min(100, prev * zoomFactor)));
   };
 
   const resetView = () => {
@@ -152,8 +152,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
       <div className="image-viewer-header">
         <div className="image-info">
           <span>
-            {imageData.width} × {imageData.height} • 
-            {fileInfo.is_8bit ? ' 8-bit' : ' 16-bit'} • 
+            {imageData.width} x {imageData.height} / 
+            {fileInfo.is_8bit ? ' 8-bit' : ' 16-bit'} / 
             Image {currentIndex + 1} of {fileInfo.num_images}
           </span>
         </div>
@@ -182,6 +182,13 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
       {fileInfo.num_images > 1 && (
         <div className="animation-controls">
           <button 
+            onClick={() => onImageIndexChange(0)}
+            disabled={currentIndex === 0}
+          >
+            First
+          </button>
+          
+          <button 
             onClick={() => onImageIndexChange(currentIndex - 1)}
             disabled={currentIndex === 0}
           >
@@ -197,6 +204,13 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
             disabled={currentIndex === fileInfo.num_images - 1}
           >
             Next →
+          </button>
+
+          <button 
+            onClick={() => onImageIndexChange(fileInfo.num_images - 1)}
+            disabled={currentIndex === fileInfo.num_images - 1}
+          >
+            Last
           </button>
         </div>
       )}
