@@ -113,8 +113,23 @@ impl StiParser {
         }
         
         // Read image data
-        for sub_header in sub_headers {
+        // For 8-bit files, image data comes immediately after all sub-image headers
+        let image_data_start = cursor.position();
+        
+        for (i, sub_header) in sub_headers.iter().enumerate() {
             let mut image = StiImage::with_header(sub_header.clone());
+            
+            // Calculate the actual position for this image's data
+            let image_position = if i == 0 {
+                // First image starts right after the sub-headers
+                image_data_start
+            } else {
+                // Subsequent images use data_offset from previous position
+                image_data_start + sub_header.data_offset as u64
+            };
+            
+            // Seek to the correct position for this image's data
+            cursor.seek(SeekFrom::Start(image_position))?;
             
             // Read raw compressed data
             image.raw_data = vec![0u8; sub_header.data_size as usize];
@@ -131,21 +146,28 @@ impl StiParser {
         
         // Read animation data if present
         if sti_file.header.app_data_size > 0 {
-            let animation_count = (sti_file.header.app_data_size / 16) as usize;
-            for _ in 0..animation_count {
-                let mut anim_data = StiAnimationData {
-                    unknown1: [0; 8],
-                    frame_count: 0,
-                    unknown2: 0,
-                    unknown3: [0; 6],
-                };
-                
-                cursor.read_exact(&mut anim_data.unknown1)?;
-                anim_data.frame_count = cursor.read_u8()?;
-                anim_data.unknown2 = cursor.read_u8()?;
-                cursor.read_exact(&mut anim_data.unknown3)?;
-                
-                sti_file.animation_data.push(anim_data);
+            let remaining_bytes = cursor.get_ref().len() as u64 - cursor.position();
+            if remaining_bytes >= sti_file.header.app_data_size as u64 {
+                let animation_count = (sti_file.header.app_data_size / 16) as usize;
+                for _ in 0..animation_count {
+                    let mut anim_data = StiAnimationData {
+                        unknown1: [0; 8],
+                        frame_count: 0,
+                        unknown2: 0,
+                        unknown3: [0; 6],
+                    };
+                    
+                    cursor.read_exact(&mut anim_data.unknown1)?;
+                    anim_data.frame_count = cursor.read_u8()?;
+                    anim_data.unknown2 = cursor.read_u8()?;
+                    cursor.read_exact(&mut anim_data.unknown3)?;
+                    
+                    sti_file.animation_data.push(anim_data);
+                }
+            } else {
+                // Not enough data for animation, but that's okay for some files
+                println!("Warning: Not enough data for animation (expected {}, have {})",
+                    sti_file.header.app_data_size, remaining_bytes);
             }
         }
         
@@ -352,6 +374,50 @@ mod tests {
                     println!("Num images: {}", header.num_images);
                     println!("Palette colors: {}", header.palette_colors);
                     println!("Width: {}, Height: {}", header.width, header.height);
+                    
+                    // Debug: Show cursor position after header
+                    println!("Cursor position after header: {}", cursor.position());
+                    
+                    // Expected structure:
+                    // - 64 bytes header ✓
+                    // - 768 bytes palette (256 * 3)
+                    // - 16 bytes sub-image header per image (1 image = 16 bytes)
+                    // - Image data
+                    let expected_palette_end = 64 + 768;
+                    let expected_subheader_end = expected_palette_end + (header.num_images as usize * 16);
+                    println!("Expected palette end: {}", expected_palette_end);
+                    println!("Expected sub-header end: {}", expected_subheader_end);
+                    println!("File size vs expected: {} vs {}", file_data.len(), expected_subheader_end);
+                    
+                    // Try to parse just the 8-bit structure
+                    if header.flags.indexed && !header.flags.rgb {
+                        let mut test_cursor = Cursor::new(file_data.as_slice());
+                        test_cursor.seek(SeekFrom::Start(64)).unwrap(); // Skip header
+                        
+                        // Try to read palette
+                        println!("Attempting to read palette at position {}", test_cursor.position());
+                        for i in 0..256 {
+                            let mut color = [0u8; 3];
+                            if test_cursor.read_exact(&mut color).is_err() {
+                                println!("Failed to read palette color {} at position {}", i, test_cursor.position());
+                                break;
+                            }
+                        }
+                        println!("Palette read completed, position: {}", test_cursor.position());
+                        
+                        // Try to read sub-image header
+                        if let Ok(sub_header) = StiParser::parse_sub_image_header(&mut test_cursor) {
+                            println!("Sub-image header: data_offset={}, data_size={}, {}x{}",
+                                sub_header.data_offset, sub_header.data_size, sub_header.width, sub_header.height);
+                            println!("Position after sub-header: {}", test_cursor.position());
+                            
+                            // Check if we have enough data for the image
+                            let remaining = file_data.len() - test_cursor.position() as usize;
+                            println!("Remaining bytes: {}, needed: {}", remaining, sub_header.data_size);
+                        } else {
+                            println!("Failed to parse sub-image header at position {}", test_cursor.position());
+                        }
+                    }
                 }
                 Err(e) => {
                     println!("Header parsing failed: {}", e);

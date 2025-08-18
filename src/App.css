@@ -3,8 +3,8 @@
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: #f6f6f6;
+  background-color: #2f2f2f;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,6 +30,8 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  background-color: #2f2f2f;
+  color: #f6f6f6;
 }
 
 .toolbar {
@@ -37,8 +39,8 @@ body {
   align-items: center;
   padding: 0 16px;
   height: 50px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  background: #2f2f2f;
+  border-bottom: 1px solid #444;
   flex-shrink: 0;
 }
 
@@ -61,37 +63,39 @@ body {
 }
 
 .toolbar-button {
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: #444;
+  border: 1px solid #555;
   border-radius: 4px;
   padding: 8px 12px;
   cursor: pointer;
   font-size: 16px;
+  color: #f6f6f6;
   transition: background-color 0.2s;
 }
 
 .toolbar-button:hover {
-  background: #e0e0e0;
+  background: #555;
 }
 
 .toolbar-title h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: #f6f6f6;
 }
 
 .toolbar-select {
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: #444;
+  border: 1px solid #555;
   border-radius: 4px;
   padding: 6px 12px;
   cursor: pointer;
   font-size: 13px;
+  color: #f6f6f6;
 }
 
 .toolbar-select:hover {
-  background: #e0e0e0;
+  background: #555;
 }
 
 .app-body {
@@ -104,8 +108,8 @@ body {
   width: 300px;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
-  border-right: 1px solid #ddd;
+  background: #333;
+  border-right: 1px solid #444;
   flex-shrink: 0;
 }
 
@@ -174,21 +178,21 @@ body {
 
 button {
   border-radius: 4px;
-  border: 1px solid #ddd;
+  border: 1px solid #555;
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
-  color: #333;
-  background-color: #f8f9fa;
+  color: #f6f6f6;
+  background-color: #444;
   transition: all 0.2s;
   cursor: pointer;
   outline: none;
 }
 
 button:hover:not(:disabled) {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
+  background-color: #555;
+  border-color: #666;
 }
 
 button:active {
@@ -200,39 +204,8 @@ button:disabled {
   cursor: not-allowed;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  .app, .toolbar, .sidebar {
-    background-color: #2f2f2f;
-    color: #f6f6f6;
-  }
-
-  .toolbar {
-    border-bottom-color: #444;
-  }
-
-  .sidebar {
-    border-right-color: #444;
-    background-color: #333;
-  }
-
-  .toolbar-button, .toolbar-select, button {
-    background-color: #444;
-    border-color: #555;
-    color: #f6f6f6;
-  }
-
-  .toolbar-button:hover, .toolbar-select:hover, button:hover:not(:disabled) {
-    background-color: #555;
-  }
-
-  .error-message {
-    background: #722f37;
-    color: #f8d7da;
-    border-color: #842029;
-  }
+.error-message {
+  background: #722f37;
+  color: #f8d7da;
+  border-color: #842029;
 }

@@ -9,8 +9,9 @@ interface ImageViewerProps {
   onImageIndexChange: (index: number) => void;
 }
 
-// Global zoom level that persists across image changes
+// Global values that persist across image changes
 let persistentZoom = 2;
+let persistentShowTransparent = true;
 
 const ImageViewer: React.FC<ImageViewerProps> = ({
   imageData,
@@ -23,15 +24,20 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [showTransparent, setShowTransparent] = useState(persistentShowTransparent);
 
-  // Update the persistent zoom whenever local zoom changes
+  // Update the persistent values whenever local values change
   useEffect(() => {
     persistentZoom = zoom;
   }, [zoom]);
 
   useEffect(() => {
+    persistentShowTransparent = showTransparent;
+  }, [showTransparent]);
+
+  useEffect(() => {
     drawImage();
-  }, [imageData, zoom, pan]);
+  }, [imageData, zoom, pan, showTransparent]);
 
   const drawImage = () => {
     const canvas = canvasRef.current;
@@ -60,7 +66,13 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
         imageDataArray.data[pixelIndex] = color[0];     // R
         imageDataArray.data[pixelIndex + 1] = color[1]; // G
         imageDataArray.data[pixelIndex + 2] = color[2]; // B
-        imageDataArray.data[pixelIndex + 3] = paletteIndex === 0 ? 0 : 255; // A (transparent if index 0)
+        
+        // Handle transparency - first palette color (index 0) is usually transparent blue
+        if (paletteIndex === 0 && !showTransparent) {
+          imageDataArray.data[pixelIndex + 3] = 0; // Fully transparent
+        } else {
+          imageDataArray.data[pixelIndex + 3] = 255; // Fully opaque
+        }
       }
     } else {
       // 16-bit RGB565 or direct RGB data
@@ -179,6 +191,17 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
           <button onClick={zoomIn}>+</button>
           <button onClick={zoomOut}>-</button>
           <button onClick={fitToWindow}>Fit</button>
+          {fileInfo.is_8bit && (
+            <button
+              onClick={() => setShowTransparent(!showTransparent)}
+              style={{
+                backgroundColor: showTransparent ? '#666' : '#007bff',
+                color: 'white'
+              }}
+            >
+              {showTransparent ? 'Hide Transparent' : 'Show Transparent'}
+            </button>
+          )}
           <span className="zoom-info">{Math.round(zoom * 100)}%</span>
         </div>
       </div>

@@ -69,8 +69,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
   return (
     <div className="file-explorer">
       <div className="file-explorer-header">
-        <h3>STI File Explorer</h3>
-        
         {!rootDirectory ? (
           <div className="directory-selection">
             <button onClick={handleSelectRootDirectory} className="select-directory-btn">
@@ -141,11 +139,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
             </div>
             <div className="file-info">
               <div className="file-name">{item.name}</div>
-              {item.is_directory && (
-                <div className="directory-indicator">
-                  {item.contains_sti_files ? 'folder (contains STI files)' : 'folder'}
-                </div>
-              )}
             </div>
             {item.is_sti_file && (
               <div className="sti-badge">STI</div>

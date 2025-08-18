@@ -81,7 +81,14 @@ async fn open_sti_file(file_path: String) -> Result<StiFileInfo, String> {
         .map_err(|e| format!("Failed to read file: {}", e))?;
     
     let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| format!("Failed to parse STI file '{}': {}", file_path, e))?;
+        .map_err(|e| {
+            match e {
+                sti::types::StiError::InvalidFormat(msg) => format!("Invalid STI format in '{}': {}", file_path, msg),
+                sti::types::StiError::Io(io_err) => format!("IO error reading '{}': {}", file_path, io_err),
+                sti::types::StiError::Decompression(decomp_err) => format!("Decompression error in '{}': {}", file_path, decomp_err),
+                sti::types::StiError::UnsupportedFormat(unsup_err) => format!("Unsupported format in '{}': {}", file_path, unsup_err),
+            }
+        })?;
     
     let mut info = StiFileInfo::from(&sti_file);
     info.file_size = file_data.len() as u64;
