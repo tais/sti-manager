@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DirectoryApi } from '../services/api';
 import { DirectoryContents, DirectoryItem } from '../types/sti';
 import './FileExplorer.css';

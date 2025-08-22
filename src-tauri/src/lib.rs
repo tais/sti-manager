@@ -1,12 +1,22 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
+use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 
 mod sti;
 
 use sti::{StiParser, StiFile};
+
+// Global caches for parsed STI files and directory scan results
+type StiCache = Arc<Mutex<HashMap<String, Arc<StiFile>>>>;
+type DirectoryCache = Arc<Mutex<HashMap<String, bool>>>;
+
+lazy_static::lazy_static! {
+    static ref STI_CACHE: StiCache = Arc::new(Mutex::new(HashMap::new()));
+    static ref DIRECTORY_CACHE: DirectoryCache = Arc::new(Mutex::new(HashMap::new()));
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StiFileInfo {
@@ -77,21 +87,50 @@ async fn open_sti_file(file_path: String) -> Result<StiFileInfo, String> {
         return Err("File does not exist".to_string());
     }
     
-    let file_data = fs::read(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    // Try to get from cache first
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
     
-    let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| {
-            match e {
-                sti::types::StiError::InvalidFormat(msg) => format!("Invalid STI format in '{}': {}", file_path, msg),
-                sti::types::StiError::Io(io_err) => format!("IO error reading '{}': {}", file_path, io_err),
-                sti::types::StiError::Decompression(decomp_err) => format!("Decompression error in '{}': {}", file_path, decomp_err),
-                sti::types::StiError::UnsupportedFormat(unsup_err) => format!("Unsupported format in '{}': {}", file_path, unsup_err),
+    let (sti_file, file_size) = if let Some(cached) = cached_file {
+        // Get file size without re-reading the entire file
+        let metadata = fs::metadata(path)
+            .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+        (cached, metadata.len())
+    } else {
+        // Parse and cache the file
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        let parsed_file = StiParser::parse(&file_data)
+            .map_err(|e| {
+                match e {
+                    sti::types::StiError::InvalidFormat(msg) => format!("Invalid STI format in '{}': {}", file_path, msg),
+                    sti::types::StiError::Io(io_err) => format!("IO error reading '{}': {}", file_path, io_err),
+                    sti::types::StiError::Decompression(decomp_err) => format!("Decompression error in '{}': {}", file_path, decomp_err),
+                    sti::types::StiError::UnsupportedFormat(unsup_err) => format!("Unsupported format in '{}': {}", file_path, unsup_err),
+                }
+            })?;
+        
+        let file_size = file_data.len() as u64;
+        let arc_file = Arc::new(parsed_file);
+        
+        // Cache the parsed file
+        {
+            let mut cache = STI_CACHE.lock().unwrap();
+            // Limit cache size to prevent memory issues
+            if cache.len() > 50 {
+                cache.clear(); // Simple eviction strategy
             }
-        })?;
+            cache.insert(file_path.clone(), arc_file.clone());
+        }
+        
+        (arc_file, file_size)
+    };
     
-    let mut info = StiFileInfo::from(&sti_file);
-    info.file_size = file_data.len() as u64;
+    let mut info = StiFileInfo::from(sti_file.as_ref());
+    info.file_size = file_size;
     
     Ok(info)
 }
@@ -172,12 +211,37 @@ async fn debug_sti_file(file_path: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn get_sti_image(file_path: String, image_index: usize) -> Result<StiImageData, String> {
-    let path = Path::new(&file_path);
-    let file_data = fs::read(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    // Try to get from cache first
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
     
-    let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+    let sti_file = if let Some(cached) = cached_file {
+        cached
+    } else {
+        // Parse and cache the file
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        let parsed_file = StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+        
+        let arc_file = Arc::new(parsed_file);
+        
+        // Cache the parsed file
+        {
+            let mut cache = STI_CACHE.lock().unwrap();
+            // Limit cache size to prevent memory issues
+            if cache.len() > 50 {
+                cache.clear(); // Simple eviction strategy
+            }
+            cache.insert(file_path.clone(), arc_file.clone());
+        }
+        
+        arc_file
+    };
     
     if image_index >= sti_file.images.len() {
         return Err("Image index out of bounds".to_string());
@@ -199,12 +263,37 @@ async fn get_sti_image(file_path: String, image_index: usize) -> Result<StiImage
 
 #[tauri::command]
 async fn get_sti_metadata(file_path: String) -> Result<serde_json::Value, String> {
-    let path = Path::new(&file_path);
-    let file_data = fs::read(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    // Try to get from cache first
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
     
-    let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+    let sti_file = if let Some(cached) = cached_file {
+        cached
+    } else {
+        // Parse and cache the file
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        let parsed_file = StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+        
+        let arc_file = Arc::new(parsed_file);
+        
+        // Cache the parsed file
+        {
+            let mut cache = STI_CACHE.lock().unwrap();
+            // Limit cache size to prevent memory issues
+            if cache.len() > 50 {
+                cache.clear(); // Simple eviction strategy
+            }
+            cache.insert(file_path.clone(), arc_file.clone());
+        }
+        
+        arc_file
+    };
     
     serde_json::to_value(&sti_file.header)
         .map_err(|e| format!("Failed to serialize metadata: {}", e))
@@ -321,23 +410,60 @@ async fn browse_directory(directory_path: String) -> Result<DirectoryContents, S
     })
 }
 
-// Fast, non-recursive check if a directory contains STI files directly
+// Cached recursive check if a directory contains STI files (with depth limit for performance)
 fn directory_contains_sti_files(dir_path: &Path) -> bool {
+    let path_str = dir_path.to_string_lossy().to_string();
+    
+    // Check cache first
+    {
+        let cache = DIRECTORY_CACHE.lock().unwrap();
+        if let Some(&cached_result) = cache.get(&path_str) {
+            return cached_result;
+        }
+    }
+    
+    // Perform the check with depth limit
+    let result = directory_contains_sti_files_with_depth(dir_path, 0, 3); // Limit to 3 levels deep
+    
+    // Cache the result
+    {
+        let mut cache = DIRECTORY_CACHE.lock().unwrap();
+        // Limit cache size to prevent memory issues
+        if cache.len() > 200 {
+            cache.clear(); // Simple eviction strategy
+        }
+        cache.insert(path_str, result);
+    }
+    
+    result
+}
+
+fn directory_contains_sti_files_with_depth(dir_path: &Path, current_depth: usize, max_depth: usize) -> bool {
+    if current_depth > max_depth {
+        return false;
+    }
+    
     if let Ok(entries) = fs::read_dir(dir_path) {
         for entry in entries.flatten() {
             let path = entry.path();
+            
+            // Skip hidden files and directories
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with('.') {
+                    continue;
+                }
+            }
+            
             if path.is_file() {
                 if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
                     if extension.to_lowercase() == "sti" {
                         return true;
                     }
                 }
-            } else if path.is_dir() {
-                // Check one level deep only to avoid performance issues
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if !name.starts_with('.') && directory_contains_sti_files(&path) {
-                        return true;
-                    }
+            } else if path.is_dir() && current_depth < max_depth {
+                // Recursively check subdirectories with depth limit
+                if directory_contains_sti_files_with_depth(&path, current_depth + 1, max_depth) {
+                    return true;
                 }
             }
         }
@@ -386,12 +512,37 @@ fn scan_directory_for_sti(dir: &Path, sti_files: &mut Vec<String>, recursive: bo
 
 #[tauri::command]
 async fn export_image(file_path: String, image_index: usize, output_path: String, format: String) -> Result<(), String> {
-    let path = Path::new(&file_path);
-    let file_data = fs::read(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    // Try to get from cache first
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
     
-    let sti_file = StiParser::parse(&file_data)
-        .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+    let sti_file = if let Some(cached) = cached_file {
+        cached
+    } else {
+        // Parse and cache the file
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        let parsed_file = StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+        
+        let arc_file = Arc::new(parsed_file);
+        
+        // Cache the parsed file
+        {
+            let mut cache = STI_CACHE.lock().unwrap();
+            // Limit cache size to prevent memory issues
+            if cache.len() > 50 {
+                cache.clear(); // Simple eviction strategy
+            }
+            cache.insert(file_path.clone(), arc_file.clone());
+        }
+        
+        arc_file
+    };
     
     if image_index >= sti_file.images.len() {
         return Err("Image index out of bounds".to_string());
@@ -444,6 +595,15 @@ async fn export_image(file_path: String, image_index: usize, output_path: String
     Ok(())
 }
 
+#[tauri::command]
+async fn clear_sti_cache() -> Result<(), String> {
+    let mut sti_cache = STI_CACHE.lock().unwrap();
+    let mut dir_cache = DIRECTORY_CACHE.lock().unwrap();
+    sti_cache.clear();
+    dir_cache.clear();
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -459,7 +619,8 @@ pub fn run() {
             select_directory,
             browse_directory,
             scan_for_sti_files,
-            debug_sti_file
+            debug_sti_file,
+            clear_sti_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

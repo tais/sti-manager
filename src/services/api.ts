@@ -40,6 +40,10 @@ export class DirectoryApi {
   static async scanForStiFiles(directoryPath: string, recursive: boolean = true): Promise<string[]> {
     return await invoke('scan_for_sti_files', { directoryPath, recursive });
   }
+
+  static async clearStiCache(): Promise<void> {
+    return await invoke('clear_sti_cache');
+  }
 }
 
 export class FileSystem {
