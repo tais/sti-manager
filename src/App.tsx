@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import './App.css';
-import { StiFileInfo, StiImageData, StiMetadata } from './types/sti';
-import { StiApi } from './services/api';
+import { StiFileInfo, StiImageData, StiMetadata, EditableStiFile } from './types/sti';
+import { StiApi, StiEditingApi } from './services/api';
 import FileExplorer from './components/FileExplorer';
 import ImageViewer from './components/ImageViewer';
+import ImageEditor from './components/ImageEditor';
 import MetadataPanel from './components/MetadataPanel';
 import ToolBar from './components/ToolBar';
 
@@ -16,6 +17,10 @@ interface AppState {
   loading: boolean;
   error: string | null;
   sidebarVisible: boolean;
+  isEditMode: boolean;
+  editableSti: EditableStiFile | null;
+  rootDirectory: string | null;
+  currentPath: string | null;
 }
 
 function App() {
@@ -28,10 +33,15 @@ function App() {
     loading: false,
     error: null,
     sidebarVisible: true,
+    isEditMode: false,
+    editableSti: null,
+    rootDirectory: null,
+    currentPath: null,
   });
 
   const handleFileSelect = async (filePath: string) => {
     if (filePath === state.currentFile) return;
+    if (state.isEditMode) return; // Block file selection during edit mode
 
     setState(prev => ({ ...prev, loading: true, error: null }));
 
@@ -53,6 +63,8 @@ function App() {
         imageData,
         metadata,
         loading: false,
+        isEditMode: false,
+        editableSti: null,
       }));
     } catch (error) {
       setState(prev => ({
@@ -103,71 +115,156 @@ function App() {
     }
   };
 
+  const handleEnterEditMode = async () => {
+    if (!state.currentFile) return;
+
+    setState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const editableSti = await StiEditingApi.enterEditMode(state.currentFile!);
+      setState(prev => ({
+        ...prev,
+        isEditMode: true,
+        editableSti,
+        loading: false,
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to enter edit mode',
+        loading: false,
+      }));
+    }
+  };
+
+  const handleExitEditMode = () => {
+    setState(prev => ({
+      ...prev,
+      isEditMode: false,
+      editableSti: null,
+    }));
+  };
+
+  const handleSaveEdit = () => {
+    // After saving, exit edit mode and refresh the file
+    handleExitEditMode();
+    if (state.currentFile) {
+      handleFileSelect(state.currentFile);
+    }
+  };
+
+  const handleUpdateEditableSti = (updatedSti: EditableStiFile) => {
+    setState(prev => ({
+      ...prev,
+      editableSti: updatedSti,
+    }));
+  };
+
+  const handleEditImageChange = (index: number) => {
+    setState(prev => ({
+      ...prev,
+      currentImageIndex: index,
+    }));
+  };
+
   const toggleSidebar = () => {
     setState(prev => ({ ...prev, sidebarVisible: !prev.sidebarVisible }));
   };
 
+  const handleRootDirectoryChange = (rootDirectory: string | null) => {
+    setState(prev => ({ ...prev, rootDirectory }));
+  };
+
+  const handleCurrentPathChange = (currentPath: string | null) => {
+    setState(prev => ({ ...prev, currentPath }));
+  };
+
   return (
     <div className="app">
-      <ToolBar 
-        onToggleSidebar={toggleSidebar}
-        onExport={handleExport}
-        canExport={state.imageData !== null}
-        loading={state.loading}
-      />
-      
-      <div className="app-body">
-        {state.sidebarVisible && (
-          <div className="sidebar">
-            <FileExplorer onFileSelect={handleFileSelect} />
-            {state.metadata && (
-              <MetadataPanel 
-                fileInfo={state.fileInfo}
-                metadata={state.metadata}
-              />
-            )}
-          </div>
-        )}
-        
-        <div className="main-content">
-          {state.error && (
-            <div className="error-message">
-              Error: {state.error}
-            </div>
-          )}
+      {!state.isEditMode ? (
+        <>
+          <ToolBar
+            onToggleSidebar={toggleSidebar}
+            onExport={handleExport}
+            onEnterEditMode={handleEnterEditMode}
+            canExport={state.imageData !== null}
+            canEdit={state.currentFile !== null && !state.loading}
+            loading={state.loading}
+          />
           
-          {state.loading && (
-            <div className="loading-message">
-              Loading...
-            </div>
-          )}
-          
-          {state.imageData && state.fileInfo && !state.loading && (
-            <ImageViewer
-              imageData={state.imageData}
-              fileInfo={state.fileInfo}
-              currentIndex={state.currentImageIndex}
-              onImageIndexChange={handleImageIndexChange}
-            />
-          )}
-          
-          {!state.currentFile && !state.loading && (
-            <div className="welcome-message">
-              <h2>STI Manager</h2>
-              <p>Select an STI file from the file explorer to get started.</p>
-              <div className="file-info">
-                <h3>Supported Features:</h3>
-                <ul>
-                  <li>View 8-bit and 16-bit STI images</li>
-                  <li>Browse animated sequences</li>
-                  <li>View file metadata</li>
-                  <li>Export to PNG, JPEG, BMP</li>
-                </ul>
+          <div className="app-body">
+            {state.sidebarVisible && (
+              <div className="sidebar">
+                <FileExplorer
+                  onFileSelect={handleFileSelect}
+                  rootDirectory={state.rootDirectory}
+                  currentPath={state.currentPath}
+                  onRootDirectoryChange={handleRootDirectoryChange}
+                  onCurrentPathChange={handleCurrentPathChange}
+                />
+                {state.metadata && (
+                  <MetadataPanel
+                    fileInfo={state.fileInfo}
+                    metadata={state.metadata}
+                  />
+                )}
               </div>
+            )}
+            
+            <div className="main-content">
+              {state.error && (
+                <div className="error-message">
+                  Error: {state.error}
+                </div>
+              )}
+              
+              {state.loading && (
+                <div className="loading-message">
+                  Loading...
+                </div>
+              )}
+              
+              {state.imageData && state.fileInfo && !state.loading && (
+                <ImageViewer
+                  imageData={state.imageData}
+                  fileInfo={state.fileInfo}
+                  currentIndex={state.currentImageIndex}
+                  onImageIndexChange={handleImageIndexChange}
+                />
+              )}
+              
+              {!state.currentFile && !state.loading && (
+                <div className="welcome-message">
+                  <h2>STI Manager</h2>
+                  <p>Select an STI file from the file explorer to get started.</p>
+                  <div className="file-info">
+                    <h3>Supported Features:</h3>
+                    <ul>
+                      <li>View 8-bit and 16-bit STI images</li>
+                      <li>Browse animated sequences</li>
+                      <li>Edit images with palette-based tools</li>
+                      <li>Add, delete, and reorder images</li>
+                      <li>View file metadata</li>
+                      <li>Export to PNG, JPEG, BMP</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      ) : (
+        state.editableSti && (
+          <ImageEditor
+            editableSti={state.editableSti}
+            currentImageIndex={state.currentImageIndex}
+            onImageChange={handleEditImageChange}
+            onSave={handleSaveEdit}
+            onCancel={handleExitEditMode}
+            onUpdate={handleUpdateEditableSti}
+          />
+        )
+      )}
     </div>
   );
 }

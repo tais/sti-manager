@@ -19,12 +19,17 @@
   font-size: 13px;
   color: #eee;
   font-family: monospace;
+  flex: 1;
+  min-width: 0;
 }
 
 .view-controls {
   display: flex;
   align-items: center;
+  flex-direction: row !important;
   gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .view-controls button {
@@ -35,6 +40,8 @@
   cursor: pointer;
   font-size: 12px;
   transition: background-color 0.2s;
+  color: #eee;
+  flex-shrink: 0;
 }
 
 .view-controls button:hover {

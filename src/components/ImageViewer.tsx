@@ -25,6 +25,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const [showTransparent, setShowTransparent] = useState(persistentShowTransparent);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // Update the persistent values whenever local values change
   useEffect(() => {
@@ -37,18 +38,45 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
 
   useEffect(() => {
     drawImage();
-  }, [imageData, zoom, pan, showTransparent]);
+  }, [imageData, zoom, pan, showTransparent, canvasSize]);
+
+  // Handle canvas resizing
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        setCanvasSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    // Initial size
+    updateCanvasSize();
+
+    // Add resize observer
+    const resizeObserver = new ResizeObserver(updateCanvasSize);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      resizeObserver.observe(canvas.parentElement!);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   const drawImage = () => {
     const canvas = canvasRef.current;
-    if (!canvas || !imageData) return;
+    if (!canvas || !imageData || canvasSize.width === 0 || canvasSize.height === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    // Set canvas size only if it has changed
+    if (canvas.width !== canvasSize.width || canvas.height !== canvasSize.height) {
+      canvas.width = canvasSize.width;
+      canvas.height = canvasSize.height;
+    }
 
     // Clear canvas
     ctx.fillStyle = '#f0f0f0';
@@ -163,11 +191,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   };
 
   const fitToWindow = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (canvasSize.width === 0 || canvasSize.height === 0) return;
 
-    const scaleX = canvas.offsetWidth / imageData.width;
-    const scaleY = canvas.offsetHeight / imageData.height;
+    const scaleX = canvasSize.width / imageData.width;
+    const scaleY = canvasSize.height / imageData.height;
     const scale = Math.min(scaleX, scaleY) * 0.9; // 90% to leave some margin
     
     setZoom(scale);
@@ -202,7 +229,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
               {showTransparent ? 'Hide Transparent' : 'Show Transparent'}
             </button>
           )}
-          <span className="zoom-info">{Math.round(zoom * 100)}%</span>
+          <span className="zoom-info">Zoom: {Math.round(zoom * 100)}%</span>
         </div>
       </div>
 

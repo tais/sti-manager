@@ -5,14 +5,43 @@ import './FileExplorer.css';
 
 interface FileExplorerProps {
   onFileSelect: (filePath: string) => void;
+  rootDirectory?: string | null;
+  currentPath?: string | null;
+  onRootDirectoryChange?: (rootDirectory: string | null) => void;
+  onCurrentPathChange?: (currentPath: string | null) => void;
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
-  const [rootDirectory, setRootDirectory] = useState<string | null>(null);
-  const [currentPath, setCurrentPath] = useState<string>('');
+const FileExplorer: React.FC<FileExplorerProps> = ({
+  onFileSelect,
+  rootDirectory: propRootDirectory,
+  currentPath: propCurrentPath,
+  onRootDirectoryChange,
+  onCurrentPathChange
+}) => {
+  const [rootDirectory, setRootDirectory] = useState<string | null>(propRootDirectory || null);
+  const [currentPath, setCurrentPath] = useState<string>(propCurrentPath || propRootDirectory || '');
   const [directoryContents, setDirectoryContents] = useState<DirectoryContents | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Initial load when component mounts with existing rootDirectory and currentPath
+  React.useEffect(() => {
+    if (propRootDirectory && !directoryContents) {
+      setRootDirectory(propRootDirectory);
+      const pathToLoad = propCurrentPath || propRootDirectory;
+      setCurrentPath(pathToLoad);
+      loadDirectory(pathToLoad);
+    }
+  }, [propRootDirectory, propCurrentPath]);
+
+  // Sync with parent prop changes
+  React.useEffect(() => {
+    if (propRootDirectory && propRootDirectory !== rootDirectory) {
+      setRootDirectory(propRootDirectory);
+      setCurrentPath(propRootDirectory);
+      loadDirectory(propRootDirectory);
+    }
+  }, [propRootDirectory, rootDirectory]);
 
   const handleSelectRootDirectory = async () => {
     try {
@@ -21,6 +50,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
       if (selectedPath) {
         setRootDirectory(selectedPath);
         setCurrentPath(selectedPath);
+        if (onRootDirectoryChange) {
+          onRootDirectoryChange(selectedPath);
+        }
         await loadDirectory(selectedPath);
       }
     } catch (err) {
@@ -35,6 +67,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
       const contents = await DirectoryApi.browseDirectory(path);
       setDirectoryContents(contents);
       setCurrentPath(path);
+      if (onCurrentPathChange) {
+        onCurrentPathChange(path);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load directory');
       setDirectoryContents(null);
@@ -61,8 +96,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
 
   const getRelativePath = (fullPath: string) => {
     if (!rootDirectory) return fullPath;
-    return fullPath.startsWith(rootDirectory) 
-      ? fullPath.substring(rootDirectory.length) || '/'
+    if (fullPath === rootDirectory) return '/';
+    return fullPath.startsWith(rootDirectory)
+      ? fullPath.substring(rootDirectory.length).replace(/^\/+/, '/') || '/'
       : fullPath;
   };
 

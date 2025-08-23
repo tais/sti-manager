@@ -67,3 +67,20 @@ export interface FileItem {
   size?: number;
   modified?: Date;
 }
+
+// Editing types
+export interface EditableImage {
+  width: number;
+  height: number;
+  data: number[]; // Palette indices for 8-bit, RGB565 bytes for 16-bit
+}
+
+export interface EditableStiFile {
+  file_path: string;
+  is_8bit: boolean;
+  is_16bit: boolean;
+  palette: number[][] | null; // Array of [R, G, B] color values
+  images: EditableImage[];
+  transparent_color: number;
+  flags: number;
+}

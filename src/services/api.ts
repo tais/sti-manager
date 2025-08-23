@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { StiFileInfo, StiImageData, StiMetadata, DirectoryContents } from '../types/sti';
+import { StiFileInfo, StiImageData, StiMetadata, DirectoryContents, EditableStiFile, EditableImage } from '../types/sti';
 
 export class StiApi {
   static async openStiFile(filePath: string): Promise<StiFileInfo> {
@@ -43,6 +43,32 @@ export class DirectoryApi {
 
   static async clearStiCache(): Promise<void> {
     return await invoke('clear_sti_cache');
+  }
+}
+
+export class StiEditingApi {
+  static async enterEditMode(filePath: string): Promise<EditableStiFile> {
+    return await invoke('enter_edit_mode', { filePath });
+  }
+
+  static async updateImageData(filePath: string, imageIndex: number, imageData: EditableImage): Promise<void> {
+    return await invoke('update_image_data', { filePath, imageIndex, imageData });
+  }
+
+  static async addNewImage(filePath: string, imageData: EditableImage): Promise<number> {
+    return await invoke('add_new_image', { filePath, imageData });
+  }
+
+  static async reorderImages(filePath: string, newOrder: number[]): Promise<void> {
+    return await invoke('reorder_images', { filePath, newOrder });
+  }
+
+  static async deleteImage(filePath: string, imageIndex: number): Promise<void> {
+    return await invoke('delete_image', { filePath, imageIndex });
+  }
+
+  static async saveStiFile(filePath: string, editableSti: EditableStiFile): Promise<void> {
+    return await invoke('save_sti_file', { filePath, editableSti });
   }
 }
 

@@ -299,11 +299,127 @@ async fn get_sti_metadata(file_path: String) -> Result<serde_json::Value, String
         .map_err(|e| format!("Failed to serialize metadata: {}", e))
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EditableImage {
+    pub width: u16,
+    pub height: u16,
+    pub data: Vec<u8>, // Palette indices for 8-bit, RGB565 bytes for 16-bit
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EditableStiFile {
+    pub file_path: String,
+    pub is_8bit: bool,
+    pub is_16bit: bool,
+    pub palette: Option<Vec<[u8; 3]>>,
+    pub images: Vec<EditableImage>,
+    pub transparent_color: u32,
+    pub flags: u32,
+}
+
 #[tauri::command]
-async fn save_sti_file(_file_path: String, _sti_data: serde_json::Value) -> Result<(), String> {
-    // This is a placeholder for saving STI files
-    // Implementation would deserialize the sti_data and use StiParser::write
-    Err("STI file saving not yet implemented".to_string())
+async fn enter_edit_mode(file_path: String) -> Result<EditableStiFile, String> {
+    // Try to get from cache first
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
+    
+    let sti_file = if let Some(cached) = cached_file {
+        cached
+    } else {
+        // Parse and cache the file
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        let parsed_file = StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?;
+        
+        let arc_file = Arc::new(parsed_file);
+        
+        // Cache the parsed file
+        {
+            let mut cache = STI_CACHE.lock().unwrap();
+            if cache.len() > 50 {
+                cache.clear();
+            }
+            cache.insert(file_path.clone(), arc_file.clone());
+        }
+        
+        arc_file
+    };
+    
+    // Convert to editable format
+    let mut editable_images = Vec::new();
+    for image in &sti_file.images {
+        let pixel_data = image.decompressed_data.as_ref()
+            .ok_or("Image data not decompressed")?;
+        
+        editable_images.push(EditableImage {
+            width: image.width,
+            height: image.height,
+            data: pixel_data.clone(),
+        });
+    }
+    
+    Ok(EditableStiFile {
+        file_path: file_path.clone(),
+        is_8bit: sti_file.is_8bit(),
+        is_16bit: sti_file.is_16bit(),
+        palette: sti_file.palette.map(|p| p.to_vec()),
+        images: editable_images,
+        transparent_color: sti_file.header.transparent_color,
+        flags: sti_file.header.flags.into(),
+    })
+}
+
+#[tauri::command]
+async fn update_image_data(file_path: String, image_index: usize, image_data: EditableImage) -> Result<(), String> {
+    // For now, just validate the operation - actual implementation would update cached data
+    if image_data.data.len() != (image_data.width as usize * image_data.height as usize) &&
+       image_data.data.len() != (image_data.width as usize * image_data.height as usize * 2) {
+        return Err("Invalid image data size".to_string());
+    }
+    
+    // TODO: Update the cached STI file with new image data
+    Ok(())
+}
+
+#[tauri::command]
+async fn add_new_image(file_path: String, image_data: EditableImage) -> Result<usize, String> {
+    // Validate image data
+    if image_data.data.len() != (image_data.width as usize * image_data.height as usize) &&
+       image_data.data.len() != (image_data.width as usize * image_data.height as usize * 2) {
+        return Err("Invalid image data size".to_string());
+    }
+    
+    // TODO: Add new image to cached STI file and return new index
+    Ok(0) // Placeholder
+}
+
+#[tauri::command]
+async fn reorder_images(file_path: String, new_order: Vec<usize>) -> Result<(), String> {
+    // TODO: Reorder images in cached STI file based on new_order indices
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_image(file_path: String, image_index: usize) -> Result<(), String> {
+    // TODO: Delete image from cached STI file
+    Ok(())
+}
+
+#[tauri::command]
+async fn save_sti_file(file_path: String, editable_sti: EditableStiFile) -> Result<(), String> {
+    // TODO: Implement STI file writing using the parser
+    // This would involve:
+    // 1. Converting EditableStiFile back to StiFile format
+    // 2. Compressing image data using ETRLE
+    // 3. Writing the complete STI file structure to disk
+    // 4. Updating the cache
+    
+    Err("STI file saving not yet fully implemented".to_string())
 }
 
 #[tauri::command]
@@ -620,7 +736,12 @@ pub fn run() {
             browse_directory,
             scan_for_sti_files,
             debug_sti_file,
-            clear_sti_cache
+            clear_sti_cache,
+            enter_edit_mode,
+            update_image_data,
+            add_new_image,
+            reorder_images,
+            delete_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
