@@ -28,7 +28,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<PaintTool>({ type: 'brush', size: 1 });
   const [selectedColor, setSelectedColor] = useState<number>(0);
-  const [zoom, setZoom] = useState<number>(4); // Higher zoom for pixel editing
+  const [zoom, setZoom] = useState<number>(2);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -317,7 +317,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const resetView = () => {
-    setZoom(4);
+    setZoom(2);
     setPan({ x: 0, y: 0 });
   };
 

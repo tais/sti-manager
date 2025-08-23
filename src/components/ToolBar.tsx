@@ -32,7 +32,6 @@ const ToolBar: React.FC<ToolBarProps> = ({
       </div>
       
       <div className="toolbar-section toolbar-title">
-        <h1>STI Manager</h1>
       </div>
       
       <div className="toolbar-section">
