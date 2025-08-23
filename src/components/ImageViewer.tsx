@@ -171,7 +171,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   };
 
   const resetView = () => {
-    setZoom(1);
+    setZoom(4);
     persistentZoom = 1;
     setPan({ x: 0, y: 0 });
   };

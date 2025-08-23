@@ -14,6 +14,7 @@
   background: #333;
   border-bottom: 1px solid #555;
   flex-shrink: 0;
+  gap: 16px;
 }
 
 .editor-info {
@@ -21,6 +22,40 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.editor-view-controls button {
+  background: #444;
+  border: 1px solid #666;
+  color: #f6f6f6;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.editor-view-controls button:hover {
+  background: #555;
+}
+
+.zoom-info {
+  font-size: 12px;
+  color: #ccc;
+  font-family: monospace;
+  min-width: 50px;
+  text-align: center;
 }
 
 .unsaved-indicator {
@@ -32,6 +67,7 @@
 .editor-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .editor-actions button {
@@ -148,32 +184,6 @@
   gap: 6px;
   font-size: 12px;
   cursor: pointer;
-}
-
-.zoom-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.zoom-controls button {
-  background: #444;
-  border: 1px solid #666;
-  color: #f6f6f6;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-}
-
-.zoom-controls span {
-  font-size: 12px;
-  min-width: 32px;
-  text-align: center;
 }
 
 .image-list {

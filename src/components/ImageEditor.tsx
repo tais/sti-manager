@@ -28,19 +28,20 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<PaintTool>({ type: 'brush', size: 1 });
   const [selectedColor, setSelectedColor] = useState<number>(0);
-  const [zoom, setZoom] = useState<number>(8); // Higher zoom for pixel editing
+  const [zoom, setZoom] = useState<number>(4); // Higher zoom for pixel editing
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
+  const [showTransparent, setShowTransparent] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const currentImage = editableSti.images[currentImageIndex];
 
   useEffect(() => {
     drawCanvas();
-  }, [currentImage, zoom, pan, showGrid]);
+  }, [currentImage, zoom, pan, showGrid, showTransparent]);
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -49,9 +50,10 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    // Set canvas size to match the container
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
 
     // Clear canvas with checkerboard pattern for transparency
     ctx.fillStyle = '#f0f0f0';
@@ -83,8 +85,23 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
           const dataIndex = py * currentImage.width + px;
           const paletteIndex = currentImage.data[dataIndex];
           
-          if (paletteIndex !== 0 || !editableSti.palette) { // Skip transparent pixels
-            const color = editableSti.palette[paletteIndex] || [255, 0, 255]; // Magenta for invalid indices
+          const color = editableSti.palette[paletteIndex] || [255, 0, 255]; // Magenta for invalid indices
+          
+          // Handle transparent pixels (index 0)
+          if (paletteIndex === 0) {
+            if (showTransparent) {
+              // Show transparent pixels as semi-transparent
+              ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.3)`;
+              ctx.fillRect(
+                x + px * zoom,
+                y + py * zoom,
+                zoom,
+                zoom
+              );
+            }
+            // Skip drawing if showTransparent is false
+          } else {
+            // Draw non-transparent pixels normally
             ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
             ctx.fillRect(
               x + px * zoom,
@@ -140,7 +157,19 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       
       ctx.stroke();
     }
-  }, [currentImage, zoom, pan, showGrid, editableSti.is_8bit, editableSti.palette]);
+  }, [currentImage, zoom, pan, showGrid, showTransparent, editableSti.is_8bit, editableSti.palette]);
+
+  // Handle window resize by redrawing canvas
+  useEffect(() => {
+    const handleResize = () => {
+      drawCanvas();
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [drawCanvas]);
 
   const getPixelCoordinates = (clientX: number, clientY: number): { x: number, y: number } | null => {
     const canvas = canvasRef.current;
@@ -287,6 +316,24 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     setHasUnsavedChanges(true);
   };
 
+  const resetView = () => {
+    setZoom(4);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const fitToWindow = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !currentImage) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width / currentImage.width;
+    const scaleY = rect.height / currentImage.height;
+    const scale = Math.min(scaleX, scaleY) * 0.9;
+    
+    setZoom(Math.max(1, Math.floor(scale)));
+    setPan({ x: 0, y: 0 });
+  };
+
   return (
     <div className="image-editor">
       <div className="editor-header">
@@ -295,6 +342,34 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
           {hasUnsavedChanges && <span className="unsaved-indicator">●</span>}
         </div>
         
+        <div className="editor-view-controls">
+          {editableSti.is_8bit && (
+            <button
+              onClick={() => setShowTransparent(!showTransparent)}
+              style={{
+                backgroundColor: showTransparent ? '#666' : '#007bff',
+                color: 'white'
+              }}
+            >
+              {showTransparent ? 'Hide Transparent' : 'Show Transparent'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            style={{
+              backgroundColor: showGrid ? '#007bff' : '#666',
+              color: 'white'
+            }}
+          >
+            {showGrid ? 'Hide Grid' : 'Show Grid'}
+          </button>
+          <button onClick={resetView}>Reset</button>
+          <button onClick={() => setZoom(Math.max(1, zoom / 2))}>-</button>
+          <button onClick={() => setZoom(Math.min(32, zoom * 2))}>+</button>
+          <button onClick={fitToWindow}>Fit</button>
+          <span className="zoom-info">{Math.round(zoom * 100)}%</span>
+        </div>
+
         <div className="editor-actions">
           <button onClick={handleSave} disabled={!hasUnsavedChanges}>
             Save
@@ -350,24 +425,6 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
             </div>
           )}
 
-          <div className="view-panel">
-            <h3>View</h3>
-            <div className="view-controls">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={showGrid}
-                  onChange={(e) => setShowGrid(e.target.checked)}
-                />
-                Show Grid
-              </label>
-              <div className="zoom-controls">
-                <button onClick={() => setZoom(Math.max(1, zoom / 2))}>-</button>
-                <span>{zoom}x</span>
-                <button onClick={() => setZoom(Math.min(32, zoom * 2))}>+</button>
-              </div>
-            </div>
-          </div>
 
           <div className="image-management">
             <h3>Images</h3>
