@@ -412,14 +412,33 @@ async fn delete_image(file_path: String, image_index: usize) -> Result<(), Strin
 
 #[tauri::command]
 async fn save_sti_file(file_path: String, editable_sti: EditableStiFile) -> Result<(), String> {
-    // TODO: Implement STI file writing using the parser
-    // This would involve:
-    // 1. Converting EditableStiFile back to StiFile format
-    // 2. Compressing image data using ETRLE
-    // 3. Writing the complete STI file structure to disk
-    // 4. Updating the cache
+    // Convert EditableStiFile back to StiFile format
+    let mut sti_file = convert_editable_to_sti_file(&editable_sti)
+        .map_err(|e| format!("Error converting editable STI: {}", e))?;
     
-    Err("STI file saving not yet fully implemented".to_string())
+    // Compress image data using ETRLE if needed
+    compress_sti_images(&mut sti_file)
+        .map_err(|e| format!("Error compressing images: {}", e))?;
+    
+    // Calculate and update header sizes
+    update_sti_header_sizes(&mut sti_file)
+        .map_err(|e| format!("Error updating header sizes: {}", e))?;
+    
+    // Write the STI file to bytes
+    let file_bytes = sti::StiParser::write(&sti_file)
+        .map_err(|e| format!("Error writing STI file structure: {}", e))?;
+    
+    // Write to disk
+    fs::write(&file_path, &file_bytes)
+        .map_err(|e| format!("Error writing to disk '{}': {}", file_path, e))?;
+    
+    // Clear the cache to force reload from disk
+    {
+        let mut cache = STI_CACHE.lock().unwrap();
+        cache.remove(&file_path);
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -707,6 +726,182 @@ async fn export_image(file_path: String, image_index: usize, output_path: String
         _ => return Err(format!("Unsupported export format: {}", format)),
     }
     .map_err(|e| format!("Failed to save image: {}", e))?;
+    
+    Ok(())
+}
+
+// Helper functions for STI file saving
+
+fn convert_editable_to_sti_file(editable: &EditableStiFile) -> Result<StiFile, String> {
+    use sti::{StiFile, StiImage, StiHeader, StiFlags, StiSubImageHeader};
+    
+    let mut sti_file = StiFile::new();
+    
+    // Convert header
+    let mut header = StiHeader::default();
+    header.signature = [b'S', b'T', b'C', b'I'];
+    header.transparent_color = editable.transparent_color;
+    header.flags = StiFlags::from(editable.flags);
+    
+    if editable.is_8bit {
+        header.flags.indexed = true;
+        header.flags.rgb = false;
+        header.flags.etrle_compressed = true; // Enable ETRLE compression for 8-bit
+        header.palette_colors = 256;
+        header.num_images = editable.images.len() as u16;
+        header.color_depth = 8;
+        
+        // For 8-bit multi-image files, DON'T set width/height in main header
+        // These are stored in individual sub-image headers
+        if header.num_images == 1 {
+            // Single image 8-bit files can have width/height in main header
+            if let Some(first_image) = editable.images.first() {
+                header.width = first_image.width;
+                header.height = first_image.height;
+            }
+        } else {
+            // Multi-image files: width/height should be 0 in main header
+            header.width = 0;
+            header.height = 0;
+        }
+    } else if editable.is_16bit {
+        header.flags.rgb = true;
+        header.flags.indexed = false;
+        header.color_depth = 16;
+        header.num_images = 1; // 16-bit files typically have one image
+        
+        if let Some(first_image) = editable.images.first() {
+            header.width = first_image.width;
+            header.height = first_image.height;
+        }
+    }
+    
+    sti_file.header = header;
+    
+    // Convert palette
+    if editable.is_8bit {
+        if let Some(palette_data) = &editable.palette {
+            let mut palette = [[0u8; 3]; 256];
+            for (i, color) in palette_data.iter().enumerate() {
+                if i < 256 {
+                    palette[i] = *color;
+                }
+            }
+            sti_file.palette = Some(palette);
+        } else {
+            return Err("8-bit STI file requires a palette".to_string());
+        }
+    }
+    
+    // Convert images
+    for editable_image in editable.images.iter() {
+        let mut image = if editable.is_8bit {
+            // Create sub-image header for 8-bit images
+            let sub_header = StiSubImageHeader {
+                data_offset: 0, // Will be set properly in compress_sti_images
+                data_size: 0, // Will be set after compression
+                offset_x: 0,
+                offset_y: 0,
+                height: editable_image.height,
+                width: editable_image.width,
+            };
+            
+            StiImage::with_header(sub_header)
+        } else {
+            StiImage::new(editable_image.width, editable_image.height)
+        };
+        
+        // Set decompressed data (will be compressed later if needed)
+        image.decompressed_data = Some(editable_image.data.clone());
+        image.width = editable_image.width;
+        image.height = editable_image.height;
+        
+        sti_file.images.push(image);
+    }
+    
+    Ok(sti_file)
+}
+
+fn compress_sti_images(sti_file: &mut StiFile) -> Result<(), String> {
+    use sti::etrle::EtrleDecoder;
+    
+    if sti_file.is_8bit() && sti_file.header.flags.etrle_compressed {
+        // Compress 8-bit ETRLE images with proper offset calculation
+        let mut cumulative_data_offset = 0u32;
+        
+        for (index, image) in sti_file.images.iter_mut().enumerate() {
+            if let Some(decompressed_data) = &image.decompressed_data {
+                let encoder = EtrleDecoder::new(image.width, image.height);
+                let compressed_data = encoder.compress(decompressed_data)
+                    .map_err(|e| format!("Failed to compress image data: {}", e))?;
+                
+                image.raw_data = compressed_data;
+                
+                // Update sub-header with compressed size and cumulative offset
+                if let Some(header) = &mut image.header {
+                    header.data_size = image.raw_data.len() as u32;
+                    
+                    // data_offset is cumulative from the start of image data section
+                    header.data_offset = cumulative_data_offset;
+                }
+                
+                // Add this image's size to the cumulative offset for next image
+                cumulative_data_offset += image.raw_data.len() as u32;
+            }
+        }
+    } else if sti_file.is_16bit() {
+        // For 16-bit files, raw_data = decompressed_data (no compression)
+        for image in &mut sti_file.images {
+            if let Some(decompressed_data) = &image.decompressed_data {
+                image.raw_data = decompressed_data.clone();
+            }
+        }
+    } else {
+        // For uncompressed 8-bit files, raw_data = decompressed_data
+        let mut cumulative_data_offset = 0u32;
+        
+        for (index, image) in sti_file.images.iter_mut().enumerate() {
+            if let Some(decompressed_data) = &image.decompressed_data {
+                image.raw_data = decompressed_data.clone();
+                
+                // Update sub-header with data size and cumulative offset
+                if let Some(header) = &mut image.header {
+                    header.data_size = image.raw_data.len() as u32;
+                    header.data_offset = cumulative_data_offset;
+                }
+                
+                // Add this image's size to the cumulative offset for next image
+                cumulative_data_offset += image.raw_data.len() as u32;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn update_sti_header_sizes(sti_file: &mut StiFile) -> Result<(), String> {
+    if sti_file.is_8bit() {
+        // Calculate total compressed size for 8-bit files
+        let mut total_compressed_size = 0u32;
+        let mut total_original_size = 0u32;
+        
+        for image in &sti_file.images {
+            total_compressed_size += image.raw_data.len() as u32;
+            if let Some(decompressed) = &image.decompressed_data {
+                total_original_size += decompressed.len() as u32;
+            }
+        }
+        
+        sti_file.header.compressed_size = total_compressed_size;
+        sti_file.header.original_size = total_original_size;
+    } else if sti_file.is_16bit() {
+        // For 16-bit files, raw data = decompressed data
+        if let Some(first_image) = sti_file.images.first() {
+            let data_size = first_image.raw_data.len() as u32;
+            sti_file.header.compressed_size = data_size;
+            sti_file.header.original_size = data_size;
+        }
+    }
     
     Ok(())
 }

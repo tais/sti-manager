@@ -39,8 +39,8 @@ function App() {
     currentPath: null,
   });
 
-  const handleFileSelect = async (filePath: string) => {
-    if (filePath === state.currentFile) return;
+  const handleFileSelect = async (filePath: string, forceReload = false) => {
+    if (filePath === state.currentFile && !forceReload) return;
     if (state.isEditMode) return; // Block file selection during edit mode
 
     setState(prev => ({ ...prev, loading: true, error: null }));
@@ -149,7 +149,7 @@ function App() {
     // After saving, exit edit mode and refresh the file
     handleExitEditMode();
     if (state.currentFile) {
-      handleFileSelect(state.currentFile);
+      handleFileSelect(state.currentFile, true); // Force reload after save
     }
   };
 

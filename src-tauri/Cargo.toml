@@ -4,8 +4,17 @@ version = "0.1.0"
 description = "STI File Manager for Jagged Alliance 2"
 authors = ["STI Manager Team"]
 edition = "2021"
+default-run = "sti-manager"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "sti-manager"
+path = "src/main.rs"
+
+[[bin]]
+name = "debug_sti"
+path = "src/bin/debug_sti.rs"
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
