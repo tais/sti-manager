@@ -7,6 +7,7 @@ interface FileExplorerProps {
   onFileSelect: (filePath: string) => void;
   rootDirectory?: string | null;
   currentPath?: string | null;
+  selectedFile?: string | null;
   onRootDirectoryChange?: (rootDirectory: string | null) => void;
   onCurrentPathChange?: (currentPath: string | null) => void;
 }
@@ -15,6 +16,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   onFileSelect,
   rootDirectory: propRootDirectory,
   currentPath: propCurrentPath,
+  selectedFile,
   onRootDirectoryChange,
   onCurrentPathChange
 }) => {
@@ -23,6 +25,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   const [directoryContents, setDirectoryContents] = useState<DirectoryContents | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileListRef = React.useRef<HTMLDivElement>(null);
 
   // Initial load when component mounts with existing rootDirectory and currentPath
   React.useEffect(() => {
@@ -78,6 +81,29 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   };
 
+  // Scroll to selected file when directory contents change or selected file changes
+  React.useEffect(() => {
+    if (selectedFile && directoryContents && !loading) {
+      const scrollToSelectedFile = () => {
+        const fileListElement = fileListRef.current;
+        if (!fileListElement) return;
+
+        // Find the selected file element
+        const selectedElement = fileListElement.querySelector(`[data-file-path="${selectedFile}"]`) as HTMLElement;
+        if (selectedElement) {
+          // Scroll the selected element into view
+          selectedElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }
+      };
+
+      // Small delay to ensure DOM is updated
+      setTimeout(scrollToSelectedFile, 100);
+    }
+  }, [selectedFile, directoryContents, loading]);
+
 
   const handleItemClick = async (item: DirectoryItem) => {
     if (item.is_directory) {
@@ -89,7 +115,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 
   const handleBackClick = async () => {
     if (directoryContents?.parent_path && directoryContents.parent_path !== currentPath) {
-      await loadDirectory(directoryContents.parent_path);
+      // Prevent navigating outside the root directory
+      if (rootDirectory && directoryContents.parent_path.length >= rootDirectory.length &&
+          directoryContents.parent_path.startsWith(rootDirectory)) {
+        await loadDirectory(directoryContents.parent_path);
+      }
     }
   };
 
@@ -115,9 +145,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         ) : (
           <div className="directory-info">
             <div className="path-bar">
-              <button 
-                onClick={handleBackClick} 
-                disabled={!directoryContents?.parent_path || loading}
+              <button
+                onClick={handleBackClick}
+                disabled={
+                  !directoryContents?.parent_path ||
+                  loading ||
+                  !rootDirectory ||
+                  directoryContents.parent_path.length < rootDirectory.length ||
+                  !directoryContents.parent_path.startsWith(rootDirectory)
+                }
                 title="Go back"
               >
                 ←
@@ -145,7 +181,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         )}
       </div>
       
-      <div className="file-list">
+      <div className="file-list" ref={fileListRef}>
         {error && (
           <div className="error-message">
             {error}
@@ -166,7 +202,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         {!loading && !error && directoryContents && directoryContents.items.map((item) => (
           <div
             key={item.path}
-            className={`file-item ${item.is_directory ? 'directory' : 'file'} ${item.is_sti_file ? 'sti-file' : ''}`}
+            data-file-path={item.path}
+            className={`file-item ${item.is_directory ? 'directory' : 'file'} ${item.is_sti_file ? 'sti-file' : ''} ${selectedFile === item.path ? 'selected' : ''}`}
             onClick={() => handleItemClick(item)}
             title={item.path}
           >

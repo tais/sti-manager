@@ -199,6 +199,7 @@ function App() {
                   onFileSelect={handleFileSelect}
                   rootDirectory={state.rootDirectory}
                   currentPath={state.currentPath}
+                  selectedFile={state.currentFile}
                   onRootDirectoryChange={handleRootDirectoryChange}
                   onCurrentPathChange={handleCurrentPathChange}
                 />

@@ -13,7 +13,7 @@ interface ImageEditorProps {
 }
 
 interface PaintTool {
-  type: 'brush' | 'eraser' | 'fill' | 'eyedropper';
+  type: 'brush' | 'eraser' | 'fill' | 'eyedropper' | 'pan';
   size: number;
 }
 
@@ -238,6 +238,13 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     const coords = getPixelCoordinates(e.clientX, e.clientY);
     
+    if (tool.type === 'pan') {
+      // Pan tool always enables dragging
+      setIsDragging(true);
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    
     if (coords) {
       if (tool.type === 'eyedropper') {
         // Pick color
@@ -403,6 +410,12 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
               >
                 💉 Eyedropper
               </button>
+              <button
+                className={tool.type === 'pan' ? 'active' : ''}
+                onClick={() => setTool({ ...tool, type: 'pan' })}
+              >
+                ✋ Pan
+              </button>
             </div>
           </div>
 
@@ -454,7 +467,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
         <div className="editor-canvas-container">
           <canvas
             ref={canvasRef}
-            className="editor-canvas"
+            className={`editor-canvas ${tool.type === 'pan' ? 'pan-cursor' : ''}`}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

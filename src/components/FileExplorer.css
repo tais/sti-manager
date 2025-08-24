@@ -128,6 +128,23 @@
   background-color: #2a2a4a;
 }
 
+.file-item.selected {
+  background-color: #4a5568 !important;
+}
+
+.file-item.sti-file.selected {
+  background-color: #4a4a6a !important;
+  border-color: #90cdf4;
+}
+
+.file-item.selected:hover {
+  background-color: #5a6578 !important;
+}
+
+.file-item.sti-file.selected:hover {
+  background-color: #5a5a7a !important;
+}
+
 .file-icon {
   margin-right: 0.75rem;
   width: 1.5rem;

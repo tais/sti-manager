@@ -254,6 +254,14 @@
   cursor: crosshair;
 }
 
+.editor-canvas.pan-cursor {
+  cursor: grab;
+}
+
+.editor-canvas.pan-cursor:active {
+  cursor: grabbing;
+}
+
 /* Scrollbars for dark mode */
 .editor-sidebar::-webkit-scrollbar,
 .palette-grid::-webkit-scrollbar,
