@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import { StiFileInfo, StiImageData, StiMetadata, EditableStiFile } from './types/sti';
-import { StiApi, StiEditingApi } from './services/api';
+import { StiApi, StiEditingApi, DirectoryApi } from './services/api';
 import FileExplorer from './components/FileExplorer';
 import ImageViewer from './components/ImageViewer';
 import ImageEditor from './components/ImageEditor';
@@ -145,11 +145,56 @@ function App() {
     }));
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     // After saving, exit edit mode and refresh the file
-    handleExitEditMode();
-    if (state.currentFile) {
-      handleFileSelect(state.currentFile, true); // Force reload after save
+    const currentIndex = state.currentImageIndex; // Preserve current image index
+    const currentFilePath = state.currentFile;
+    
+    if (!currentFilePath) return;
+    
+    // Set loading state immediately
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      // Explicitly clear the backend cache before reloading
+      await DirectoryApi.clearStiCache();
+      
+      // Add a delay to ensure cache clearing is complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Re-load the file info first
+      const fileInfo = await StiApi.openStiFile(currentFilePath);
+      
+      // Load the specific image we were editing, or fallback to index 0
+      const targetIndex = Math.min(currentIndex, fileInfo.num_images - 1);
+      const imageData = await StiApi.getStiImage(currentFilePath, targetIndex);
+      
+      // Get fresh metadata
+      const metadata = await StiApi.getStiMetadata(currentFilePath);
+      
+      // Update state with fresh data and exit edit mode
+      setState(prev => ({
+        ...prev,
+        currentFile: currentFilePath,
+        fileInfo,
+        currentImageIndex: targetIndex,
+        imageData,
+        metadata,
+        loading: false,
+        isEditMode: false,
+        editableSti: null,
+      }));
+      
+    } catch (error) {
+      console.error('Failed to reload after save:', error);
+      // Fallback to exit edit mode and show error
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to reload after save',
+        loading: false,
+        isEditMode: false,
+        editableSti: null,
+      }));
     }
   };
 
