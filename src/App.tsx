@@ -7,6 +7,7 @@ import ImageViewer from './components/ImageViewer';
 import ImageEditor from './components/ImageEditor';
 import MetadataPanel from './components/MetadataPanel';
 import ToolBar from './components/ToolBar';
+import ImageList from './components/ImageList';
 
 interface AppState {
   currentFile: string | null;
@@ -17,10 +18,12 @@ interface AppState {
   loading: boolean;
   error: string | null;
   sidebarVisible: boolean;
+  imageListVisible: boolean;
   isEditMode: boolean;
   editableSti: EditableStiFile | null;
   rootDirectory: string | null;
   currentPath: string | null;
+  selectedImages: number[];
 }
 
 function App() {
@@ -33,10 +36,12 @@ function App() {
     loading: false,
     error: null,
     sidebarVisible: true,
+    imageListVisible: true,
     isEditMode: false,
     editableSti: null,
     rootDirectory: null,
     currentPath: null,
+    selectedImages: [],
   });
 
   const handleFileSelect = async (filePath: string, forceReload = false) => {
@@ -216,6 +221,27 @@ function App() {
     setState(prev => ({ ...prev, sidebarVisible: !prev.sidebarVisible }));
   };
 
+  const toggleImageList = () => {
+    setState(prev => ({ ...prev, imageListVisible: !prev.imageListVisible }));
+  };
+
+  const handleImageSelect = async (index: number) => {
+    await handleImageIndexChange(index);
+  };
+
+  const handleImageToggleSelect = (index: number) => {
+    setState(prev => ({
+      ...prev,
+      selectedImages: prev.selectedImages.includes(index)
+        ? prev.selectedImages.filter(i => i !== index)
+        : [...prev.selectedImages, index]
+    }));
+  };
+
+  const handleClearSelection = () => {
+    setState(prev => ({ ...prev, selectedImages: [] }));
+  };
+
   const handleRootDirectoryChange = (rootDirectory: string | null) => {
     setState(prev => ({ ...prev, rootDirectory }));
   };
@@ -258,43 +284,57 @@ function App() {
             )}
             
             <div className="main-content">
-              {state.error && (
-                <div className="error-message">
-                  Error: {state.error}
-                </div>
-              )}
-              
-              {state.loading && (
-                <div className="loading-message">
-                  Loading...
-                </div>
-              )}
-              
-              {state.imageData && state.fileInfo && !state.loading && (
-                <ImageViewer
-                  imageData={state.imageData}
-                  fileInfo={state.fileInfo}
-                  currentIndex={state.currentImageIndex}
-                  onImageIndexChange={handleImageIndexChange}
-                />
-              )}
-              
-              {!state.currentFile && !state.loading && (
-                <div className="welcome-message">
-                  <h2>STI Manager</h2>
-                  <p>Select an STI file from the file explorer to get started.</p>
-                  <div className="file-info">
-                    <h3>Supported Features:</h3>
-                    <ul>
-                      <li>View 8-bit and 16-bit STI images</li>
-                      <li>Browse animated sequences</li>
-                      <li>Edit images with palette-based tools</li>
-                      <li>Add, delete, and reorder images</li>
-                      <li>View file metadata</li>
-                      <li>Export to PNG, JPEG, BMP</li>
-                    </ul>
+              <div className="content-area">
+                {state.error && (
+                  <div className="error-message">
+                    Error: {state.error}
                   </div>
-                </div>
+                )}
+                
+                {state.loading && (
+                  <div className="loading-message">
+                    Loading...
+                  </div>
+                )}
+                
+                {state.imageData && state.fileInfo && !state.loading && (
+                  <ImageViewer
+                    imageData={state.imageData}
+                    fileInfo={state.fileInfo}
+                    currentIndex={state.currentImageIndex}
+                    onImageIndexChange={handleImageIndexChange}
+                  />
+                )}
+                
+                {!state.currentFile && !state.loading && (
+                  <div className="welcome-message">
+                    <h2>STI Manager</h2>
+                    <p>Select an STI file from the file explorer to get started.</p>
+                    <div className="file-info">
+                      <h3>Supported Features:</h3>
+                      <ul>
+                        <li>View 8-bit and 16-bit STI images</li>
+                        <li>Browse animated sequences</li>
+                        <li>Edit images with palette-based tools</li>
+                        <li>Add, delete, and reorder images</li>
+                        <li>View file metadata</li>
+                        <li>Export to PNG, JPEG, BMP</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {state.imageListVisible && state.fileInfo && state.fileInfo.num_images > 1 && (
+                <ImageList
+                  fileInfo={state.fileInfo}
+                  currentFile={state.currentFile!}
+                  currentIndex={state.currentImageIndex}
+                  selectedImages={state.selectedImages}
+                  onImageSelect={handleImageSelect}
+                  onImageToggleSelect={handleImageToggleSelect}
+                  onClearSelection={handleClearSelection}
+                />
               )}
             </div>
           </div>
