@@ -55,8 +55,8 @@ export class StiEditingApi {
     return await invoke('update_image_data', { filePath, imageIndex, imageData });
   }
 
-  static async addNewImage(filePath: string, imageData: EditableImage): Promise<number> {
-    return await invoke('add_new_image', { filePath, imageData });
+  static async addNewImage(filePath: string, imageData: EditableImage, position?: number): Promise<number> {
+    return await invoke('add_new_image', { filePath, imageData, position });
   }
 
   static async reorderImages(filePath: string, newOrder: number[]): Promise<void> {
@@ -67,8 +67,25 @@ export class StiEditingApi {
     return await invoke('delete_image', { filePath, imageIndex });
   }
 
+  static async removeImages(filePath: string, indices: number[]): Promise<void> {
+    return await invoke('remove_images_from_sti', { filePath, indices });
+  }
+
   static async saveStiFile(filePath: string, editableSti: EditableStiFile): Promise<void> {
     return await invoke('save_sti_file', { filePath, editableSti });
+  }
+
+  // Backup and safety operations
+  static async createBackup(filePath: string): Promise<string> {
+    return await invoke('create_sti_backup', { filePath });
+  }
+
+  static async validateIntegrity(filePath: string): Promise<boolean> {
+    return await invoke('validate_sti_integrity', { filePath });
+  }
+
+  static async restoreFromBackup(filePath: string, backupPath: string): Promise<void> {
+    return await invoke('restore_sti_from_backup', { filePath, backupPath });
   }
 }
 

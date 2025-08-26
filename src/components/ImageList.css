@@ -125,6 +125,11 @@
   /* No additional green styling - just the current item border */
 }
 
+/* Staged items (reordered but not saved) */
+.image-item.staged {
+  border-left: 4px solid #ffcc00;
+}
+
 .image-item-header {
   display: flex;
   justify-content: space-between;
@@ -136,6 +141,12 @@
   color: #ccc;
   font-size: 12px;
   font-weight: 500;
+}
+
+.staged-position {
+  color: #ffcc00;
+  font-size: 10px;
+  font-weight: normal;
 }
 
 .selection-checkbox {
@@ -254,4 +265,198 @@
 
 .image-list-content::-webkit-scrollbar-thumb:hover {
   background: #666;
+}
+
+/* Staging Controls */
+.staging-controls {
+  background: #404040;
+  border: 2px solid #cc8800;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 0 8px 8px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.staging-info {
+  color: #ffcc00;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.staging-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.save-changes-btn {
+  background: #22aa22;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.save-changes-btn:hover:not(:disabled) {
+  background: #28cc28;
+}
+
+.cancel-changes-btn {
+  background: #aa2222;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.cancel-changes-btn:hover:not(:disabled) {
+  background: #cc2828;
+}
+
+.save-changes-btn:disabled,
+.cancel-changes-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Management Mode Styles */
+.mode-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.image-list-content.management-mode .image-item {
+  position: relative;
+  cursor: grab;
+}
+
+.image-list-content.management-mode .image-item:not(.selected):not(.current) {
+  padding-left: 40px;
+}
+
+.image-list-content.management-mode .image-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.image-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+  z-index: 1000;
+}
+
+.image-item.drop-target {
+  border: 2px dashed #4a9eff;
+  background: rgba(74, 158, 255, 0.1);
+}
+
+.drag-handle {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: #666;
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  z-index: 2;
+}
+
+.drag-handle:hover {
+  color: #4a9eff;
+}
+
+.management-controls {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-item:hover .management-controls {
+  opacity: 1;
+}
+
+.move-btn {
+  background: rgba(0, 0, 0, 0.7);
+  color: #ddd;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.move-btn:hover:not(:disabled) {
+  background: #4a9eff;
+  color: white;
+}
+
+.move-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.remove-selected-btn {
+  background: #cc4444;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 12px;
+  transition: all 0.2s ease;
+}
+
+.remove-selected-btn:hover:not(:disabled) {
+  background: #dd5555;
+}
+
+.remove-selected-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  border-radius: 4px;
+  margin: 0 8px 8px 8px;
+  font-size: 13px;
+  color: #ddd;
+}
+
+.selection-controls {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  margin: 0 8px 8px 8px;
 }

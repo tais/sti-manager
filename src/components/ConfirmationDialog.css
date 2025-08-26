@@ -1,0 +1,124 @@
+.confirmation-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.confirmation-dialog {
+  background: #2a2a2a;
+  border-radius: 8px;
+  max-width: 500px;
+  min-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+}
+
+.confirmation-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #444;
+  background: #333;
+  border-radius: 8px 8px 0 0;
+}
+
+.confirmation-title {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.confirmation-content {
+  padding: 20px;
+}
+
+.confirmation-message {
+  color: #cccccc;
+  margin: 0 0 16px 0;
+  font-size: 1em;
+  line-height: 1.5;
+}
+
+.preview-section {
+  background: #333;
+  border-radius: 4px;
+  padding: 12px;
+  margin: 12px 0;
+  border-left: 4px solid #555;
+}
+
+.preview-section h4 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.preview-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #cccccc;
+  font-size: 0.85em;
+}
+
+.preview-item {
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  background: #333;
+  border-radius: 0 0 8px 8px;
+  border-top: 1px solid #444;
+}
+
+.cancel-button,
+.confirm-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 80px;
+}
+
+.cancel-button {
+  background: #555;
+  color: #ffffff;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: #666;
+}
+
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm-button {
+  background: #0066cc;
+  color: #ffffff;
+}
+
+.confirm-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.confirm-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -387,27 +387,234 @@ async fn update_image_data(file_path: String, image_index: usize, image_data: Ed
 }
 
 #[tauri::command]
-async fn add_new_image(file_path: String, image_data: EditableImage) -> Result<usize, String> {
+async fn create_sti_backup(file_path: String) -> Result<String, String> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err("STI file does not exist".to_string());
+    }
+    
+    // Create backup path with timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let backup_path = format!("{}.backup.{}", file_path, timestamp);
+    
+    // Copy the file to backup location
+    fs::copy(&file_path, &backup_path)
+        .map_err(|e| format!("Failed to create backup: {}", e))?;
+    
+    Ok(backup_path)
+}
+
+#[tauri::command]
+async fn validate_sti_integrity(file_path: String) -> Result<bool, String> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Ok(false);
+    }
+    
+    // Try to parse the STI file to validate integrity
+    match fs::read(path) {
+        Ok(file_data) => {
+            match StiParser::parse(&file_data) {
+                Ok(_) => Ok(true),
+                Err(_) => Ok(false),
+            }
+        },
+        Err(_) => Ok(false),
+    }
+}
+
+#[tauri::command]
+async fn restore_sti_from_backup(file_path: String, backup_path: String) -> Result<(), String> {
+    let backup = Path::new(&backup_path);
+    if !backup.exists() {
+        return Err("Backup file does not exist".to_string());
+    }
+    
+    // Copy backup back to original location
+    fs::copy(&backup_path, &file_path)
+        .map_err(|e| format!("Failed to restore from backup: {}", e))?;
+    
+    // Clear cache to force reload
+    {
+        let mut cache = STI_CACHE.lock().unwrap();
+        cache.remove(&file_path);
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn add_new_image(file_path: String, image_data: EditableImage, position: Option<usize>) -> Result<usize, String> {
     // Validate image data
     if image_data.data.len() != (image_data.width as usize * image_data.height as usize) &&
        image_data.data.len() != (image_data.width as usize * image_data.height as usize * 2) {
         return Err("Invalid image data size".to_string());
     }
     
-    // TODO: Add new image to cached STI file and return new index
-    Ok(0) // Placeholder
+    // Create backup first
+    let backup_path = create_sti_backup(file_path.clone()).await?;
+    
+    // Try to get cached STI file or parse it
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
+    
+    let mut sti_file = if let Some(cached) = cached_file {
+        (*cached).clone()
+    } else {
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?
+    };
+    
+    // Create new STI image
+    let mut new_image = if sti_file.is_8bit() {
+        let sub_header = sti::StiSubImageHeader {
+            data_offset: 0,
+            data_size: 0,
+            offset_x: 0,
+            offset_y: 0,
+            height: image_data.height,
+            width: image_data.width,
+        };
+        sti::StiImage::with_header(sub_header)
+    } else {
+        sti::StiImage::new(image_data.width, image_data.height)
+    };
+    
+    new_image.decompressed_data = Some(image_data.data);
+    new_image.width = image_data.width;
+    new_image.height = image_data.height;
+    
+    // Insert at specified position or at the end
+    let insert_pos = position.unwrap_or(sti_file.images.len());
+    let insert_pos = insert_pos.min(sti_file.images.len());
+    
+    sti_file.images.insert(insert_pos, new_image);
+    sti_file.header.num_images = sti_file.images.len() as u16;
+    
+    // Save the modified STI file
+    save_modified_sti_file(&file_path, &sti_file).await?;
+    
+    Ok(insert_pos)
 }
 
 #[tauri::command]
 async fn reorder_images(file_path: String, new_order: Vec<usize>) -> Result<(), String> {
-    // TODO: Reorder images in cached STI file based on new_order indices
+    // Create backup first
+    let backup_path = create_sti_backup(file_path.clone()).await?;
+    
+    // Get cached STI file or parse it
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
+    
+    let mut sti_file = if let Some(cached) = cached_file {
+        (*cached).clone()
+    } else {
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?
+    };
+    
+    // Validate new_order
+    if new_order.len() != sti_file.images.len() {
+        return Err("New order length doesn't match image count".to_string());
+    }
+    
+    let mut used_indices = vec![false; sti_file.images.len()];
+    for &index in &new_order {
+        if index >= sti_file.images.len() {
+            return Err(format!("Invalid index {} in new order", index));
+        }
+        if used_indices[index] {
+            return Err(format!("Duplicate index {} in new order", index));
+        }
+        used_indices[index] = true;
+    }
+    
+    // Reorder images according to new_order
+    let original_images = sti_file.images.clone();
+    sti_file.images.clear();
+    
+    for &index in &new_order {
+        sti_file.images.push(original_images[index].clone());
+    }
+    
+    // Save the modified STI file
+    save_modified_sti_file(&file_path, &sti_file).await?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn remove_images_from_sti(file_path: String, indices: Vec<usize>) -> Result<(), String> {
+    if indices.is_empty() {
+        return Ok(());
+    }
+    
+    // Create backup first
+    let backup_path = create_sti_backup(file_path.clone()).await?;
+    
+    // Get cached STI file or parse it
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&file_path).cloned()
+    };
+    
+    let mut sti_file = if let Some(cached) = cached_file {
+        (*cached).clone()
+    } else {
+        let path = Path::new(&file_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?
+    };
+    
+    // Validate indices
+    for &index in &indices {
+        if index >= sti_file.images.len() {
+            return Err(format!("Invalid index {} for removal", index));
+        }
+    }
+    
+    // Check if we're not removing all images
+    if indices.len() >= sti_file.images.len() {
+        return Err("Cannot remove all images from STI file".to_string());
+    }
+    
+    // Sort indices in descending order to remove from the end first
+    let mut sorted_indices = indices.clone();
+    sorted_indices.sort_by(|a, b| b.cmp(a));
+    
+    // Remove images
+    for &index in &sorted_indices {
+        sti_file.images.remove(index);
+    }
+    
+    // Update header
+    sti_file.header.num_images = sti_file.images.len() as u16;
+    
+    // Save the modified STI file
+    save_modified_sti_file(&file_path, &sti_file).await?;
+    
     Ok(())
 }
 
 #[tauri::command]
 async fn delete_image(file_path: String, image_index: usize) -> Result<(), String> {
-    // TODO: Delete image from cached STI file
-    Ok(())
+    // Use the new remove_images_from_sti function for single image removal
+    remove_images_from_sti(file_path, vec![image_index]).await
 }
 
 #[tauri::command]
@@ -879,6 +1086,40 @@ fn compress_sti_images(sti_file: &mut StiFile) -> Result<(), String> {
     Ok(())
 }
 
+// Helper function to save modified STI files with proper compression and validation
+async fn save_modified_sti_file(file_path: &str, sti_file: &StiFile) -> Result<(), String> {
+    // Convert to editable format first
+    let editable_sti = convert_sti_to_editable(sti_file)?;
+    
+    // Use existing save function
+    save_sti_file(file_path.to_string(), editable_sti).await
+}
+
+fn convert_sti_to_editable(sti_file: &StiFile) -> Result<EditableStiFile, String> {
+    let mut editable_images = Vec::new();
+    
+    for image in &sti_file.images {
+        let pixel_data = image.decompressed_data.as_ref()
+            .ok_or("Image data not decompressed")?;
+        
+        editable_images.push(EditableImage {
+            width: image.width,
+            height: image.height,
+            data: pixel_data.clone(),
+        });
+    }
+    
+    Ok(EditableStiFile {
+        file_path: String::new(), // Will be set by caller
+        is_8bit: sti_file.is_8bit(),
+        is_16bit: sti_file.is_16bit(),
+        palette: sti_file.palette.map(|p| p.to_vec()),
+        images: editable_images,
+        transparent_color: sti_file.header.transparent_color,
+        flags: sti_file.header.flags.into(),
+    })
+}
+
 fn update_sti_header_sizes(sti_file: &mut StiFile) -> Result<(), String> {
     if sti_file.is_8bit() {
         // Calculate total compressed size for 8-bit files
@@ -936,7 +1177,11 @@ pub fn run() {
             update_image_data,
             add_new_image,
             reorder_images,
-            delete_image
+            delete_image,
+            remove_images_from_sti,
+            create_sti_backup,
+            validate_sti_integrity,
+            restore_sti_from_backup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

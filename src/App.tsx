@@ -250,6 +250,51 @@ function App() {
     setState(prev => ({ ...prev, currentPath }));
   };
 
+  const handleFileUpdated = async () => {
+    if (!state.currentFile) return;
+    
+    const currentFilePath = state.currentFile;
+    const currentIndex = state.currentImageIndex;
+    
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      // Clear the backend cache before reloading
+      await DirectoryApi.clearStiCache();
+      
+      // Add a delay to ensure cache clearing is complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Re-load the file info first
+      const fileInfo = await StiApi.openStiFile(currentFilePath);
+      
+      // Load the current image or fallback to index 0 if out of bounds
+      const targetIndex = Math.min(currentIndex, fileInfo.num_images - 1);
+      const imageData = await StiApi.getStiImage(currentFilePath, targetIndex);
+      
+      // Get fresh metadata
+      const metadata = await StiApi.getStiMetadata(currentFilePath);
+      
+      // Update state with fresh data
+      setState(prev => ({
+        ...prev,
+        fileInfo,
+        currentImageIndex: targetIndex,
+        imageData,
+        metadata,
+        loading: false,
+      }));
+      
+    } catch (error) {
+      console.error('Failed to refresh file after update:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to refresh file',
+        loading: false,
+      }));
+    }
+  };
+
   return (
     <div className="app">
       {!state.isEditMode ? (
@@ -334,6 +379,7 @@ function App() {
                   onImageSelect={handleImageSelect}
                   onImageToggleSelect={handleImageToggleSelect}
                   onClearSelection={handleClearSelection}
+                  onFileUpdated={handleFileUpdated}
                 />
               )}
             </div>

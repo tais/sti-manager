@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StiFileInfo } from '../types/sti';
-import { StiApi } from '../services/api';
+import { StiApi, StiEditingApi } from '../services/api';
+import ConfirmationDialog, { ConfirmationDialogProps } from './ConfirmationDialog';
 import './ImageList.css';
 
 interface ImageMetadata {
@@ -18,6 +19,7 @@ interface ImageListProps {
   onImageSelect: (index: number) => void;
   onImageToggleSelect: (index: number) => void;
   onClearSelection: () => void;
+  onFileUpdated?: () => void; // Callback to refresh the file after operations
 }
 
 const ImageList: React.FC<ImageListProps> = ({
@@ -28,14 +30,46 @@ const ImageList: React.FC<ImageListProps> = ({
   onImageSelect,
   onImageToggleSelect,
   onClearSelection,
+  onFileUpdated,
 }) => {
   const [imageMetadata, setImageMetadata] = useState<ImageMetadata[]>([]);
   const [loading, setLoading] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [managementMode, setManagementMode] = useState(false);
+  
+  // Staging system for reordering
+  const [originalOrder, setOriginalOrder] = useState<number[]>([]);
+  const [stagedOrder, setStagedOrder] = useState<number[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  
+  const [confirmationDialog, setConfirmationDialog] = useState<Omit<ConfirmationDialogProps, 'onConfirm' | 'onCancel'> & {
+    isOpen: boolean;
+    onConfirm: () => Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    riskLevel: 'medium',
+    onConfirm: async () => {},
+  });
 
   useEffect(() => {
     loadImageMetadata();
   }, [currentFile, fileInfo.num_images]);
+
+  // Initialize staging order when metadata changes
+  useEffect(() => {
+    if (imageMetadata.length > 0) {
+      const initialOrder = imageMetadata.map(img => img.index);
+      setOriginalOrder(initialOrder);
+      setStagedOrder(initialOrder);
+      setHasUnsavedChanges(false);
+    }
+  }, [imageMetadata]);
 
   const loadImageMetadata = async () => {
     if (!currentFile || fileInfo.num_images === 0) return;
@@ -61,6 +95,71 @@ const ImageList: React.FC<ImageListProps> = ({
     }
   };
 
+  // Get the current display order (staged or original)
+  const getCurrentDisplayOrder = (): ImageMetadata[] => {
+    return stagedOrder.map(originalIndex =>
+      imageMetadata.find(img => img.index === originalIndex)!
+    ).filter(Boolean);
+  };
+
+  // Apply staging changes locally
+  const applyStagedReorder = (newOrder: number[]) => {
+    setStagedOrder(newOrder);
+    setHasUnsavedChanges(!arraysEqual(newOrder, originalOrder));
+  };
+
+  // Check if two arrays are equal
+  const arraysEqual = (arr1: number[], arr2: number[]): boolean => {
+    return arr1.length === arr2.length && arr1.every((val, index) => val === arr2[index]);
+  };
+
+  // Save staged changes to file
+  const handleSaveChanges = () => {
+    if (!hasUnsavedChanges) return;
+
+    setConfirmationDialog({
+      isOpen: true,
+      title: 'Save Reorder Changes',
+      message: `Apply the current image order to the STI file? This will permanently reorder ${stagedOrder.length} images.`,
+      riskLevel: 'medium',
+      previewData: [
+        'Current order will be saved to file',
+        'This action cannot be undone'
+      ],
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await StiEditingApi.reorderImages(currentFile, stagedOrder);
+          
+          // Update original order and clear unsaved changes
+          setOriginalOrder([...stagedOrder]);
+          setHasUnsavedChanges(false);
+          
+          // Force cache invalidation and reload file data
+          if (onFileUpdated) {
+            await onFileUpdated();
+          }
+          
+          // Reload image metadata to reflect new order
+          await loadImageMetadata();
+          
+          setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          console.error('Failed to save reorder changes:', error);
+          alert(`Failed to save changes: ${error}`);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  // Cancel staged changes
+  const handleCancelChanges = () => {
+    setStagedOrder([...originalOrder]);
+    setHasUnsavedChanges(false);
+  };
+
   const handleImageClick = (index: number, event: React.MouseEvent) => {
     if (multiSelectMode || event.ctrlKey || event.metaKey) {
       // Multi-select mode or Ctrl/Cmd click
@@ -84,6 +183,119 @@ const ImageList: React.FC<ImageListProps> = ({
     onClearSelection();
   };
 
+  const handleRemoveSelected = () => {
+    if (selectedImages.length === 0) return;
+
+    const preview = selectedImages
+      .sort((a, b) => a - b)
+      .map(index => `Remove image #${index} (${imageMetadata[index]?.width}×${imageMetadata[index]?.height})`);
+
+    setConfirmationDialog({
+      isOpen: true,
+      title: 'Remove Selected Images',
+      message: `Are you sure you want to remove ${selectedImages.length} image${selectedImages.length > 1 ? 's' : ''} from this STI file?`,
+      riskLevel: 'high',
+      previewData: preview,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await StiEditingApi.removeImages(currentFile, selectedImages);
+          onClearSelection();
+          if (onFileUpdated) {
+            await onFileUpdated();
+          }
+          setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          console.error('Failed to remove images:', error);
+          alert(`Failed to remove images: ${error}`);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  // Simplified drag and drop handlers for staging system
+  const handleDragStart = (dragIndex: number, event: React.DragEvent) => {
+    if (!managementMode) return;
+    
+    // Find the position in the current staged order
+    const stagedIndex = stagedOrder.indexOf(dragIndex);
+    setDraggedIndex(stagedIndex);
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (event: React.DragEvent) => {
+    if (!managementMode || draggedIndex === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (dropIndex: number, event: React.DragEvent) => {
+    if (!managementMode || draggedIndex === null) return;
+    event.preventDefault();
+    
+    // Find the position in the current staged order
+    const stagedIndex = stagedOrder.indexOf(dropIndex);
+    setDropTargetIndex(stagedIndex);
+  };
+
+  const handleDragLeave = () => {
+    if (!managementMode) return;
+    setDropTargetIndex(null);
+  };
+
+  const handleDrop = (dropIndex: number, event: React.DragEvent) => {
+    if (!managementMode || draggedIndex === null) {
+      setDraggedIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+
+    event.preventDefault();
+
+    // Find the position in the current staged order
+    const targetStagedIndex = stagedOrder.indexOf(dropIndex);
+    
+    if (draggedIndex === targetStagedIndex) {
+      setDraggedIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+
+    // Create new staged order
+    const newOrder = [...stagedOrder];
+    const [removed] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetStagedIndex, 0, removed);
+
+    applyStagedReorder(newOrder);
+
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleMoveUp = (originalIndex: number) => {
+    const currentStagedIndex = stagedOrder.indexOf(originalIndex);
+    if (currentStagedIndex === 0) return;
+
+    const newOrder = [...stagedOrder];
+    [newOrder[currentStagedIndex - 1], newOrder[currentStagedIndex]] =
+      [newOrder[currentStagedIndex], newOrder[currentStagedIndex - 1]];
+
+    applyStagedReorder(newOrder);
+  };
+
+  const handleMoveDown = (originalIndex: number) => {
+    const currentStagedIndex = stagedOrder.indexOf(originalIndex);
+    if (currentStagedIndex === stagedOrder.length - 1) return;
+
+    const newOrder = [...stagedOrder];
+    [newOrder[currentStagedIndex], newOrder[currentStagedIndex + 1]] =
+      [newOrder[currentStagedIndex + 1], newOrder[currentStagedIndex]];
+
+    applyStagedReorder(newOrder);
+  };
+
   if (loading) {
     return (
       <div className="image-list">
@@ -102,65 +314,168 @@ const ImageList: React.FC<ImageListProps> = ({
       <div className="image-list-header">
         <h3>Images ({fileInfo.num_images})</h3>
         
-        <div className="selection-controls">
-          {multiSelectMode && (
-            <>
-              <button 
-                className="select-action"
-                onClick={handleSelectAll}
-                disabled={selectedImages.length === imageMetadata.length}
-              >
-                All
-              </button>
-              <button 
-                className="select-action"
-                onClick={handleDeselectAll}
-                disabled={selectedImages.length === 0}
-              >
-                None
-              </button>
-            </>
-          )}
+        <div className="mode-controls">
           <button
-            className={`mode-toggle ${multiSelectMode ? 'active' : ''}`}
+            className={`mode-toggle ${managementMode ? 'active' : ''}`}
             onClick={() => {
-              const newMode = !multiSelectMode;
-              setMultiSelectMode(newMode);
-              // Clear selections when exiting multi-select mode
-              if (!newMode && selectedImages.length > 0) {
+              const newMode = !managementMode;
+              setManagementMode(newMode);
+              if (!newMode) {
+                setMultiSelectMode(false);
                 onClearSelection();
+                // Reset staging when exiting management mode
+                if (hasUnsavedChanges) {
+                  handleCancelChanges();
+                }
               }
             }}
-            title={multiSelectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
+            title={managementMode ? 'Exit management mode' : 'Enter management mode'}
           >
-            {multiSelectMode ? 'Select ✓' : 'Select □'}
+            {managementMode ? 'Manage ⚙️' : 'Manage 🔧'}
           </button>
+          
+          {managementMode && (
+            <button
+              className={`mode-toggle ${multiSelectMode ? 'active' : ''}`}
+              onClick={() => {
+                const newMode = !multiSelectMode;
+                setMultiSelectMode(newMode);
+                if (!newMode && selectedImages.length > 0) {
+                  onClearSelection();
+                }
+              }}
+              title={multiSelectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
+            >
+              {multiSelectMode ? 'Select ✓' : 'Select □'}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Save/Cancel controls for staged changes */}
+      {managementMode && hasUnsavedChanges && (
+        <div className="staging-controls">
+          <div className="staging-info">
+            ⚠️ You have unsaved reorder changes
+          </div>
+          <div className="staging-buttons">
+            <button
+              className="save-changes-btn"
+              onClick={handleSaveChanges}
+              disabled={loading}
+            >
+              💾 Save Changes
+            </button>
+            <button
+              className="cancel-changes-btn"
+              onClick={handleCancelChanges}
+              disabled={loading}
+            >
+              ❌ Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {managementMode && multiSelectMode && (
+        <div className="selection-controls">
+          <button
+            className="select-action"
+            onClick={handleSelectAll}
+            disabled={selectedImages.length === imageMetadata.length || loading}
+          >
+            All
+          </button>
+          <button
+            className="select-action"
+            onClick={handleDeselectAll}
+            disabled={selectedImages.length === 0 || loading}
+          >
+            None
+          </button>
+        </div>
+      )}
 
       {selectedImages.length > 0 && (
         <div className="selection-info">
           {selectedImages.length} image{selectedImages.length !== 1 ? 's' : ''} selected
+          {managementMode && selectedImages.length > 0 && (
+            <button
+              className="remove-selected-btn"
+              onClick={handleRemoveSelected}
+              disabled={loading || selectedImages.length >= imageMetadata.length}
+              title={selectedImages.length >= imageMetadata.length ? "Cannot remove all images" : "Remove selected images"}
+            >
+              🗑️ Remove Selected
+            </button>
+          )}
         </div>
       )}
 
-      <div className="image-list-content">
-        {imageMetadata.map((img) => (
+      <div className={`image-list-content ${managementMode ? 'management-mode' : ''}`}>
+        {getCurrentDisplayOrder().map((img, displayIndex) => (
           <div
             key={img.index}
             className={`image-item ${
               img.index === currentIndex ? 'current' : ''
             } ${
               selectedImages.includes(img.index) ? 'selected' : ''
+            } ${
+              managementMode && draggedIndex === displayIndex ? 'dragging' : ''
+            } ${
+              managementMode && dropTargetIndex === displayIndex ? 'drop-target' : ''
+            } ${
+              hasUnsavedChanges ? 'staged' : ''
             }`}
-            onClick={(e) => handleImageClick(img.index, e)}
+            draggable={managementMode && !multiSelectMode}
+            onClick={(e) => {
+              // Always allow image selection/navigation unless we're specifically clicking on checkboxes or controls
+              if (!managementMode) {
+                // Normal mode - use the standard click handler
+                handleImageClick(img.index, e);
+              } else if (multiSelectMode) {
+                // In management mode with multi-select - still allow navigation, but handle selection differently
+                if (e.ctrlKey || e.metaKey) {
+                  // Ctrl/Cmd click - toggle selection
+                  onImageToggleSelect(img.index);
+                } else {
+                  // Regular click - navigate to image (same as normal mode)
+                  onImageSelect(img.index);
+                }
+              } else {
+                // In management mode but not multi-select - allow selection for preview
+                onImageSelect(img.index);
+              }
+            }}
+            onDragStart={(e) => handleDragStart(img.index, e)}
+            onDragOver={handleDragOver}
+            onDragEnter={(e) => handleDragEnter(img.index, e)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(img.index, e)}
           >
+            {managementMode && !multiSelectMode && (
+              <div className="drag-handle" title="Drag to reorder">
+                ⋮⋮
+              </div>
+            )}
+            
             <div className="image-item-header">
-              <span className="image-index">#{img.index}</span>
-              {multiSelectMode && (
-                <div className={`selection-checkbox ${
-                  selectedImages.includes(img.index) ? 'checked' : ''
-                }`}>
+              <span className="image-index">
+                #{img.index}
+                {hasUnsavedChanges && displayIndex !== img.index && (
+                  <span className="staged-position"> → {displayIndex}</span>
+                )}
+              </span>
+              {managementMode && multiSelectMode && (
+                <div
+                  className={`selection-checkbox ${
+                    selectedImages.includes(img.index) ? 'checked' : ''
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onImageToggleSelect(img.index);
+                  }}
+                >
                   {selectedImages.includes(img.index) ? '✓' : '○'}
                 </div>
               )}
@@ -173,29 +488,40 @@ const ImageList: React.FC<ImageListProps> = ({
             {img.index === currentIndex && (
               <div className="current-indicator">CURRENT</div>
             )}
+
+            {managementMode && !multiSelectMode && (
+              <div className="management-controls">
+                <button
+                  className="move-btn"
+                  onClick={() => handleMoveUp(img.index)}
+                  disabled={displayIndex === 0 || loading}
+                  title="Move up"
+                >
+                  ↑
+                </button>
+                <button
+                  className="move-btn"
+                  onClick={() => handleMoveDown(img.index)}
+                  disabled={displayIndex === getCurrentDisplayOrder().length - 1 || loading}
+                  title="Move down"
+                >
+                  ↓
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {selectedImages.length > 1 && (
-        <div className="batch-actions">
-          <div className="batch-actions-header">Batch Actions</div>
-          <div className="batch-actions-buttons">
-            <button className="batch-action" disabled>
-              Export Selected
-            </button>
-            <button className="batch-action" disabled>
-              Move Selected
-            </button>
-            <button className="batch-action" disabled>
-              Copy Selected
-            </button>
-          </div>
-          <div className="batch-actions-note">
-            Coming soon: batch operations
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        riskLevel={confirmationDialog.riskLevel}
+        previewData={confirmationDialog.previewData}
+        onConfirm={confirmationDialog.onConfirm}
+        onCancel={() => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };
