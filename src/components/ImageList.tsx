@@ -42,9 +42,12 @@ const ImageList: React.FC<ImageListProps> = ({
   const [stagedOrder, setStagedOrder] = useState<number[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
-  // Drag and drop state
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  
+  // Range selection state
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  
+  // Debug state for UI feedback - remove after testing
+  const [debugInfo, setDebugInfo] = useState<string>('Range selection ready');
   
   const [confirmationDialog, setConfirmationDialog] = useState<Omit<ConfirmationDialogProps, 'onConfirm' | 'onCancel'> & {
     isOpen: boolean;
@@ -162,11 +165,18 @@ const ImageList: React.FC<ImageListProps> = ({
 
   const handleImageClick = (index: number, event: React.MouseEvent) => {
     if (multiSelectMode || event.ctrlKey || event.metaKey) {
-      // Multi-select mode or Ctrl/Cmd click
-      onImageToggleSelect(index);
+      if (event.shiftKey && lastSelectedIndex !== null && multiSelectMode) {
+        // Shift+click in multi-select mode - range selection
+        handleRangeSelection(index);
+      } else {
+        // Multi-select mode or Ctrl/Cmd click - toggle selection
+        onImageToggleSelect(index);
+        setLastSelectedIndex(index);
+      }
     } else {
       // Single select mode
       onImageSelect(index);
+      setLastSelectedIndex(index);
     }
   };
 
@@ -181,6 +191,7 @@ const ImageList: React.FC<ImageListProps> = ({
 
   const handleDeselectAll = () => {
     onClearSelection();
+    setLastSelectedIndex(null);
   };
 
   const handleRemoveSelected = () => {
@@ -215,64 +226,6 @@ const ImageList: React.FC<ImageListProps> = ({
     });
   };
 
-  // Simplified drag and drop handlers for staging system
-  const handleDragStart = (dragIndex: number, event: React.DragEvent) => {
-    if (!managementMode) return;
-    
-    // Find the position in the current staged order
-    const stagedIndex = stagedOrder.indexOf(dragIndex);
-    setDraggedIndex(stagedIndex);
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    if (!managementMode || draggedIndex === null) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDragEnter = (dropIndex: number, event: React.DragEvent) => {
-    if (!managementMode || draggedIndex === null) return;
-    event.preventDefault();
-    
-    // Find the position in the current staged order
-    const stagedIndex = stagedOrder.indexOf(dropIndex);
-    setDropTargetIndex(stagedIndex);
-  };
-
-  const handleDragLeave = () => {
-    if (!managementMode) return;
-    setDropTargetIndex(null);
-  };
-
-  const handleDrop = (dropIndex: number, event: React.DragEvent) => {
-    if (!managementMode || draggedIndex === null) {
-      setDraggedIndex(null);
-      setDropTargetIndex(null);
-      return;
-    }
-
-    event.preventDefault();
-
-    // Find the position in the current staged order
-    const targetStagedIndex = stagedOrder.indexOf(dropIndex);
-    
-    if (draggedIndex === targetStagedIndex) {
-      setDraggedIndex(null);
-      setDropTargetIndex(null);
-      return;
-    }
-
-    // Create new staged order
-    const newOrder = [...stagedOrder];
-    const [removed] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(targetStagedIndex, 0, removed);
-
-    applyStagedReorder(newOrder);
-
-    setDraggedIndex(null);
-    setDropTargetIndex(null);
-  };
 
   const handleMoveUp = (originalIndex: number) => {
     const currentStagedIndex = stagedOrder.indexOf(originalIndex);
@@ -294,6 +247,37 @@ const ImageList: React.FC<ImageListProps> = ({
       [newOrder[currentStagedIndex + 1], newOrder[currentStagedIndex]];
 
     applyStagedReorder(newOrder);
+  };
+
+  // Handle range selection with Shift+click
+  const handleRangeSelection = (endIndex: number) => {
+    if (lastSelectedIndex === null) {
+      return;
+    }
+
+    const currentDisplayOrder = getCurrentDisplayOrder();
+    const startDisplayIndex = currentDisplayOrder.findIndex(img => img.index === lastSelectedIndex);
+    const endDisplayIndex = currentDisplayOrder.findIndex(img => img.index === endIndex);
+
+    if (startDisplayIndex === -1 || endDisplayIndex === -1) {
+      return;
+    }
+
+    const min = Math.min(startDisplayIndex, endDisplayIndex);
+    const max = Math.max(startDisplayIndex, endDisplayIndex);
+
+    // Get all indices in the range
+    const rangeIndices = currentDisplayOrder.slice(min, max + 1).map(img => img.index);
+
+    // Add all indices in the range to selection that aren't already selected
+    rangeIndices.forEach(index => {
+      if (!selectedImages.includes(index)) {
+        onImageToggleSelect(index);
+      }
+    });
+    
+    // Update the last selected index to the end of the range
+    setLastSelectedIndex(endIndex);
   };
 
   if (loading) {
@@ -318,6 +302,7 @@ const ImageList: React.FC<ImageListProps> = ({
           <button
             className={`mode-toggle ${managementMode ? 'active' : ''}`}
             onClick={() => {
+              setDebugInfo(`🔧 Management mode button clicked - toggling to ${!managementMode}`);
               const newMode = !managementMode;
               setManagementMode(newMode);
               if (!newMode) {
@@ -338,6 +323,7 @@ const ImageList: React.FC<ImageListProps> = ({
             <button
               className={`mode-toggle ${multiSelectMode ? 'active' : ''}`}
               onClick={() => {
+                setDebugInfo(`✓ Multi-select button clicked - toggling to ${!multiSelectMode}`);
                 const newMode = !multiSelectMode;
                 setMultiSelectMode(newMode);
                 if (!newMode && selectedImages.length > 0) {
@@ -421,43 +407,22 @@ const ImageList: React.FC<ImageListProps> = ({
             } ${
               selectedImages.includes(img.index) ? 'selected' : ''
             } ${
-              managementMode && draggedIndex === displayIndex ? 'dragging' : ''
-            } ${
-              managementMode && dropTargetIndex === displayIndex ? 'drop-target' : ''
-            } ${
               hasUnsavedChanges ? 'staged' : ''
             }`}
-            draggable={managementMode && !multiSelectMode}
             onClick={(e) => {
-              // Always allow image selection/navigation unless we're specifically clicking on checkboxes or controls
               if (!managementMode) {
                 // Normal mode - use the standard click handler
                 handleImageClick(img.index, e);
               } else if (multiSelectMode) {
-                // In management mode with multi-select - still allow navigation, but handle selection differently
-                if (e.ctrlKey || e.metaKey) {
-                  // Ctrl/Cmd click - toggle selection
-                  onImageToggleSelect(img.index);
-                } else {
-                  // Regular click - navigate to image (same as normal mode)
-                  onImageSelect(img.index);
-                }
+                // In multi-select mode - clicking on the main item area should only display the image
+                onImageSelect(img.index);
               } else {
                 // In management mode but not multi-select - allow selection for preview
                 onImageSelect(img.index);
+                setLastSelectedIndex(img.index);
               }
             }}
-            onDragStart={(e) => handleDragStart(img.index, e)}
-            onDragOver={handleDragOver}
-            onDragEnter={(e) => handleDragEnter(img.index, e)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(img.index, e)}
           >
-            {managementMode && !multiSelectMode && (
-              <div className="drag-handle" title="Drag to reorder">
-                ⋮⋮
-              </div>
-            )}
             
             <div className="image-item-header">
               <span className="image-index">
@@ -471,9 +436,25 @@ const ImageList: React.FC<ImageListProps> = ({
                   className={`selection-checkbox ${
                     selectedImages.includes(img.index) ? 'checked' : ''
                   }`}
+                  style={{
+                    position: 'absolute',
+                    bottom: '6px',
+                    right: '6px',
+                    pointerEvents: 'auto', // Enable clicks on checkbox
+                    cursor: 'pointer'
+                  }}
                   onClick={(e) => {
-                    e.stopPropagation();
-                    onImageToggleSelect(img.index);
+                    e.stopPropagation(); // Prevent triggering the main click handler
+                    
+                    // Handle range selection with shift+click on checkbox
+                    if (e.shiftKey && lastSelectedIndex !== null) {
+                      e.preventDefault();
+                      handleRangeSelection(img.index);
+                    } else {
+                      // Regular checkbox click - toggle selection
+                      onImageToggleSelect(img.index);
+                      setLastSelectedIndex(img.index);
+                    }
                   }}
                 >
                   {selectedImages.includes(img.index) ? '✓' : '○'}

@@ -3,6 +3,12 @@
   flex-direction: column;
   height: 100%;
   background: #f8f9fa;
+  /* Desktop app feel - disable text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .image-viewer-header {
@@ -13,6 +19,11 @@
   background: #444;
   border-bottom: 1px solid #ddd;
   flex-shrink: 0;
+  /* Prevent text selection on header */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .image-info {
@@ -71,6 +82,19 @@
   width: 100%;
   height: 100%;
   display: block;
+  /* Prevent canvas dragging and selection */
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
 }
 
 .animation-controls {

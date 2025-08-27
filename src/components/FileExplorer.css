@@ -3,6 +3,12 @@
   flex-direction: column;
   height: 70%;
   border-bottom: 1px solid #e0e0e0;
+  /* Desktop app feel - disable text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .file-explorer-header {
@@ -70,6 +76,12 @@
   border-radius: 3px;
   border: 1px solid #666;
   color: #f6f6f6;
+  /* Allow text selection for path copying */
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .change-root-btn {
@@ -108,7 +120,12 @@
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  /* Enhanced desktop app feel */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
   position: relative;
 }
 
@@ -162,6 +179,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Prevent text selection on file names */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .sti-badge {

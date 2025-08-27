@@ -10,6 +10,12 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  /* Desktop app feel - disable text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .confirmation-dialog {
@@ -19,6 +25,11 @@
   min-width: 400px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   border: 1px solid #444;
+  /* Prevent text selection on dialog */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .confirmation-header {

@@ -5,7 +5,7 @@
   border-left: 1px solid #444;
   height: 100%;
   min-height: 100%;
-  min-width: 250px;
+  min-width: 300px;
   max-width: 300px;
   flex-shrink: 0;
 }
@@ -103,6 +103,12 @@
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  /* Desktop app feel - disable text selection and context menu */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .image-item:hover {
@@ -141,6 +147,11 @@
   color: #ccc;
   font-size: 12px;
   font-weight: 500;
+  /* Prevent text selection on indices */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .staged-position {
@@ -166,6 +177,11 @@
   color: #fff;
   transition: all 0.2s;
   z-index: 1;
+  /* Ensure checkbox doesn't overlap with current indicator by adding small offset when both present */
+}
+
+.image-item.current .selection-checkbox {
+  bottom: 24px; /* Move checkbox higher when current indicator is present */
 }
 
 .selection-checkbox.checked {
@@ -178,6 +194,11 @@
   color: #aaa;
   font-size: 11px;
   font-family: monospace;
+  /* Prevent text selection on dimensions */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .current-indicator {
@@ -190,6 +211,7 @@
   border-radius: 2px;
   font-size: 9px;
   font-weight: bold;
+  z-index: 2; /* Ensure it appears above checkboxes */
 }
 
 .batch-actions {
@@ -340,42 +362,13 @@
 
 .image-list-content.management-mode .image-item {
   position: relative;
-  cursor: grab;
-}
-
-.image-list-content.management-mode .image-item:not(.selected):not(.current) {
-  padding-left: 40px;
+  cursor: pointer;
 }
 
 .image-list-content.management-mode .image-item:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.image-item.dragging {
-  opacity: 0.5;
-  cursor: grabbing;
-  z-index: 1000;
-}
-
-.image-item.drop-target {
-  border: 2px dashed #4a9eff;
-  background: rgba(74, 158, 255, 0.1);
-}
-
-.drag-handle {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  color: #666;
-  font-size: 16px;
-  cursor: grab;
-  user-select: none;
-  z-index: 2;
-}
-
-.drag-handle:hover {
-  color: #4a9eff;
-}
 
 .management-controls {
   position: absolute;
