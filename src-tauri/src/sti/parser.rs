@@ -166,8 +166,7 @@ impl StiParser {
                 }
             } else {
                 // Not enough data for animation, but that's okay for some files
-                println!("Warning: Not enough data for animation (expected {}, have {})",
-                    sti_file.header.app_data_size, remaining_bytes);
+                // Animation data is optional
             }
         }
         
@@ -336,7 +335,6 @@ impl StiParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     
     #[test]
     fn test_header_parsing() {
@@ -344,7 +342,7 @@ mod tests {
         let mut header_data = vec![0u8; 64];
         header_data[0..4].copy_from_slice(b"STCI");
         
-        // Set flags for 8-bit indexed format (bit 4 and 6 set)
+        // Set flags for 8-bit indexed format (bit 3 and 5 set)
         header_data[16] = 0x28; // 40 in decimal = 0x28 = bits 3 and 5 set
         
         let mut cursor = Cursor::new(header_data.as_slice());
@@ -352,89 +350,5 @@ mod tests {
         
         assert_eq!(header.signature, [b'S', b'T', b'C', b'I']);
         assert_eq!(header.flags.indexed, true);
-    }
-    
-    #[test]
-    fn test_cryo_corpse_file() {
-        // Test the specific file that's failing
-        let file_path = "../CRYO_CORPSE.STI";
-        
-        if let Ok(file_data) = fs::read(file_path) {
-            println!("File size: {} bytes", file_data.len());
-            
-            // Test header parsing
-            let mut cursor = Cursor::new(file_data.as_slice());
-            match StiParser::parse_header(&mut cursor) {
-                Ok(header) => {
-                    println!("Header parsed successfully!");
-                    println!("Flags: 0x{:08X}", Into::<u32>::into(header.flags));
-                    println!("Is 8-bit: {}", header.flags.indexed && !header.flags.rgb);
-                    println!("Is 16-bit: {}", header.flags.rgb && !header.flags.indexed);
-                    println!("ETRLE compressed: {}", header.flags.etrle_compressed);
-                    println!("Num images: {}", header.num_images);
-                    println!("Palette colors: {}", header.palette_colors);
-                    println!("Width: {}, Height: {}", header.width, header.height);
-                    
-                    // Debug: Show cursor position after header
-                    println!("Cursor position after header: {}", cursor.position());
-                    
-                    // Expected structure:
-                    // - 64 bytes header ✓
-                    // - 768 bytes palette (256 * 3)
-                    // - 16 bytes sub-image header per image (1 image = 16 bytes)
-                    // - Image data
-                    let expected_palette_end = 64 + 768;
-                    let expected_subheader_end = expected_palette_end + (header.num_images as usize * 16);
-                    println!("Expected palette end: {}", expected_palette_end);
-                    println!("Expected sub-header end: {}", expected_subheader_end);
-                    println!("File size vs expected: {} vs {}", file_data.len(), expected_subheader_end);
-                    
-                    // Try to parse just the 8-bit structure
-                    if header.flags.indexed && !header.flags.rgb {
-                        let mut test_cursor = Cursor::new(file_data.as_slice());
-                        test_cursor.seek(SeekFrom::Start(64)).unwrap(); // Skip header
-                        
-                        // Try to read palette
-                        println!("Attempting to read palette at position {}", test_cursor.position());
-                        for i in 0..256 {
-                            let mut color = [0u8; 3];
-                            if test_cursor.read_exact(&mut color).is_err() {
-                                println!("Failed to read palette color {} at position {}", i, test_cursor.position());
-                                break;
-                            }
-                        }
-                        println!("Palette read completed, position: {}", test_cursor.position());
-                        
-                        // Try to read sub-image header
-                        if let Ok(sub_header) = StiParser::parse_sub_image_header(&mut test_cursor) {
-                            println!("Sub-image header: data_offset={}, data_size={}, {}x{}",
-                                sub_header.data_offset, sub_header.data_size, sub_header.width, sub_header.height);
-                            println!("Position after sub-header: {}", test_cursor.position());
-                            
-                            // Check if we have enough data for the image
-                            let remaining = file_data.len() - test_cursor.position() as usize;
-                            println!("Remaining bytes: {}, needed: {}", remaining, sub_header.data_size);
-                        } else {
-                            println!("Failed to parse sub-image header at position {}", test_cursor.position());
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("Header parsing failed: {}", e);
-                }
-            }
-            
-            // Test full parsing
-            match StiParser::parse(&file_data) {
-                Ok(sti_file) => {
-                    println!("Full parsing successful! Images: {}", sti_file.images.len());
-                }
-                Err(e) => {
-                    println!("Full parsing failed: {}", e);
-                }
-            }
-        } else {
-            println!("Could not read CRYO_CORPSE.STI file");
-        }
     }
 }

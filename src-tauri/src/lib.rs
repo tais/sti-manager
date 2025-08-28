@@ -1,6 +1,6 @@
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::collections::{HashSet, HashMap};
+use std::path::Path;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
@@ -375,7 +375,7 @@ async fn enter_edit_mode(file_path: String) -> Result<EditableStiFile, String> {
 }
 
 #[tauri::command]
-async fn update_image_data(file_path: String, image_index: usize, image_data: EditableImage) -> Result<(), String> {
+async fn update_image_data(_file_path: String, _image_index: usize, image_data: EditableImage) -> Result<(), String> {
     // For now, just validate the operation - actual implementation would update cached data
     if image_data.data.len() != (image_data.width as usize * image_data.height as usize) &&
        image_data.data.len() != (image_data.width as usize * image_data.height as usize * 2) {
@@ -1030,7 +1030,7 @@ fn compress_sti_images(sti_file: &mut StiFile) -> Result<(), String> {
         // Compress 8-bit ETRLE images with proper offset calculation
         let mut cumulative_data_offset = 0u32;
         
-        for (index, image) in sti_file.images.iter_mut().enumerate() {
+        for (_index, image) in sti_file.images.iter_mut().enumerate() {
             if let Some(decompressed_data) = &image.decompressed_data {
                 let encoder = EtrleDecoder::new(image.width, image.height);
                 let compressed_data = encoder.compress(decompressed_data)
@@ -1061,7 +1061,7 @@ fn compress_sti_images(sti_file: &mut StiFile) -> Result<(), String> {
         // For uncompressed 8-bit files, raw_data = decompressed_data
         let mut cumulative_data_offset = 0u32;
         
-        for (index, image) in sti_file.images.iter_mut().enumerate() {
+        for (_index, image) in sti_file.images.iter_mut().enumerate() {
             if let Some(decompressed_data) = &image.decompressed_data {
                 image.raw_data = decompressed_data.clone();
                 
