@@ -1,0 +1,348 @@
+.export-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  /* Desktop app feel - disable text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.export-dialog {
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 8px;
+  width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.export-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #444;
+  background: #333;
+  border-radius: 8px 8px 0 0;
+}
+
+.export-dialog-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background: #555;
+  color: #fff;
+}
+
+.export-dialog-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.export-section {
+  margin-bottom: 20px;
+}
+
+.export-section:last-child {
+  margin-bottom: 0;
+}
+
+.export-section label {
+  display: block;
+  color: #ddd;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.export-section select,
+.export-section input[type="text"] {
+  width: 100%;
+  padding: 8px 12px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  /* Allow text selection in inputs */
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+.export-section select:focus,
+.export-section input[type="text"]:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.export-section select:disabled,
+.export-section input[type="text"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.export-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  color: #ddd !important;
+  font-size: 14px !important;
+  font-weight: normal !important;
+  margin-bottom: 0 !important;
+  cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+  margin-right: 8px;
+  width: auto;
+  cursor: pointer;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.selection-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.selection-buttons button {
+  padding: 4px 8px;
+  background: #555;
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.selection-buttons button:hover:not(:disabled) {
+  background: #666;
+}
+
+.selection-buttons button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.image-selection-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #333;
+}
+
+.image-selection-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #444;
+}
+
+.image-selection-item:last-child {
+  border-bottom: none;
+}
+
+.image-checkbox {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: #ddd !important;
+  font-size: 14px !important;
+  font-weight: normal !important;
+  margin-bottom: 0 !important;
+}
+
+.image-checkbox input[type="checkbox"] {
+  margin-right: 8px;
+  width: auto;
+  cursor: pointer;
+}
+
+.image-info {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.path-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.path-input-group input {
+  flex: 1;
+}
+
+.browse-button {
+  padding: 8px 16px;
+  background: #007bff;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.browse-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.browse-button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+.naming-help {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #28a745;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+}
+
+.export-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #444;
+  background: #333;
+  border-radius: 0 0 8px 8px;
+}
+
+.export-dialog-footer button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+}
+
+.export-dialog-footer button:first-child {
+  background: #666;
+  color: #fff;
+}
+
+.export-dialog-footer button:first-child:hover:not(:disabled) {
+  background: #777;
+}
+
+.export-button {
+  background: #28a745 !important;
+  color: #fff !important;
+}
+
+.export-button:hover:not(:disabled) {
+  background: #218838 !important;
+}
+
+.export-dialog-footer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Scrollbar styling for image list */
+.image-selection-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.image-selection-list::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.image-selection-list::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.image-selection-list::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Scrollbar styling for dialog content */
+.export-dialog-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.export-dialog-content::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.export-dialog-content::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.export-dialog-content::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}

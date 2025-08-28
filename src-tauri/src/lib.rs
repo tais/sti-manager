@@ -454,9 +454,6 @@ async fn add_new_image(file_path: String, image_data: EditableImage, position: O
         return Err("Invalid image data size".to_string());
     }
     
-    // Create backup first
-    let backup_path = create_sti_backup(file_path.clone()).await?;
-    
     // Try to get cached STI file or parse it
     let cached_file = {
         let cache = STI_CACHE.lock().unwrap();
@@ -507,8 +504,6 @@ async fn add_new_image(file_path: String, image_data: EditableImage, position: O
 
 #[tauri::command]
 async fn reorder_images(file_path: String, new_order: Vec<usize>) -> Result<(), String> {
-    // Create backup first
-    let backup_path = create_sti_backup(file_path.clone()).await?;
     
     // Get cached STI file or parse it
     let cached_file = {
@@ -562,8 +557,6 @@ async fn remove_images_from_sti(file_path: String, indices: Vec<usize>) -> Resul
         return Ok(());
     }
     
-    // Create backup first
-    let backup_path = create_sti_backup(file_path.clone()).await?;
     
     // Get cached STI file or parse it
     let cached_file = {
@@ -930,6 +923,7 @@ async fn export_image(file_path: String, image_index: usize, output_path: String
         "png" => img.save_with_format(&output_path, image::ImageFormat::Png),
         "jpeg" | "jpg" => img.save_with_format(&output_path, image::ImageFormat::Jpeg),
         "bmp" => img.save_with_format(&output_path, image::ImageFormat::Bmp),
+        "tiff" | "tif" => img.save_with_format(&output_path, image::ImageFormat::Tiff),
         _ => return Err(format!("Unsupported export format: {}", format)),
     }
     .map_err(|e| format!("Failed to save image: {}", e))?;

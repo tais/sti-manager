@@ -2,7 +2,7 @@ import React from 'react';
 
 interface ToolBarProps {
   onToggleSidebar: () => void;
-  onExport: (format: string) => void;
+  onExport: () => void;
   onEnterEditMode?: () => void;
   canExport: boolean;
   canEdit?: boolean;
@@ -17,14 +17,12 @@ const ToolBar: React.FC<ToolBarProps> = ({
   canEdit,
   loading
 }) => {
-  const exportFormats = ['PNG', 'JPEG', 'BMP'];
-
   return (
     <div className="toolbar">
       <div className="toolbar-section">
-        <button 
+        <button
           onClick={onToggleSidebar}
-          className="toolbar-button"
+          className="toolbar-button-menu"
           title="Toggle Sidebar"
         >
           ☰
@@ -47,21 +45,14 @@ const ToolBar: React.FC<ToolBarProps> = ({
         )}
         
         {canExport && (
-          <div className="export-dropdown">
-            <select
-              onChange={(e) => e.target.value && onExport(e.target.value)}
-              disabled={loading}
-              className="toolbar-select"
-              defaultValue=""
-            >
-              <option value="" disabled>Export as...</option>
-              {exportFormats.map(format => (
-                <option key={format} value={format}>
-                  {format}
-                </option>
-              ))}
-            </select>
-          </div>
+          <button
+            onClick={onExport}
+            disabled={loading}
+            className="toolbar-button"
+            title="Export Images"
+          >
+            📤 Export
+          </button>
         )}
       </div>
     </div>

@@ -103,15 +103,32 @@ body {
 .toolbar-button {
   background: #444;
   border: 1px solid #555;
-  padding: 1px 10px;
-  margin: 2px 10px;
+  padding: 1px 7px;
+  margin: 1px 5px;
+  min-height:26px;
+  min-width:70px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #f6f6f6;
+  transition: background-color 0.2s;
+}
+
+.toolbar-button:hover {
+  background: #555;
+}
+
+.toolbar-button-menu {
+  background: #444;
+  border: 1px solid #555;
+  padding: 4px 10px;
+  margin: 4px 5px;
   cursor: pointer;
   font-size: 14px;
   color: #f6f6f6;
   transition: background-color 0.2s;
 }
 
-.toolbar-button:hover {
+.toolbar-button-menu:hover {
   background: #555;
 }
 

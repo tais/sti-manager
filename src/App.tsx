@@ -8,6 +8,7 @@ import ImageEditor from './components/ImageEditor';
 import MetadataPanel from './components/MetadataPanel';
 import ToolBar from './components/ToolBar';
 import ImageList from './components/ImageList';
+import ExportDialog from './components/ExportDialog';
 
 interface AppState {
   currentFile: string | null;
@@ -24,6 +25,7 @@ interface AppState {
   rootDirectory: string | null;
   currentPath: string | null;
   selectedImages: number[];
+  exportDialogOpen: boolean;
 }
 
 function App() {
@@ -42,6 +44,7 @@ function App() {
     rootDirectory: null,
     currentPath: null,
     selectedImages: [],
+    exportDialogOpen: false,
   });
 
   const handleFileSelect = async (filePath: string, forceReload = false) => {
@@ -104,20 +107,17 @@ function App() {
     }
   };
 
-  const handleExport = async (format: string) => {
-    if (!state.currentFile || state.imageData === null) return;
+  const handleOpenExportDialog = () => {
+    setState(prev => ({ ...prev, exportDialogOpen: true }));
+  };
 
-    try {
-      // This would open a save dialog in a real implementation
-      const outputPath = `/tmp/exported_image.${format.toLowerCase()}`;
-      await StiApi.exportImage(state.currentFile, state.currentImageIndex, outputPath, format);
-      console.log(`Image exported to ${outputPath}`);
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Export failed',
-      }));
-    }
+  const handleCloseExportDialog = () => {
+    setState(prev => ({ ...prev, exportDialogOpen: false }));
+  };
+
+  // Legacy export function for backward compatibility with ToolBar
+  const handleExport = async (format: string) => {
+    handleOpenExportDialog();
   };
 
   const handleEnterEditMode = async () => {
@@ -301,7 +301,7 @@ function App() {
         <>
           <ToolBar
             onToggleSidebar={toggleSidebar}
-            onExport={handleExport}
+            onExport={handleOpenExportDialog}
             onEnterEditMode={handleEnterEditMode}
             canExport={state.imageData !== null}
             canEdit={state.currentFile !== null && !state.loading}
@@ -384,6 +384,18 @@ function App() {
               )}
             </div>
           </div>
+          
+          {/* Export Dialog */}
+          {state.exportDialogOpen && state.fileInfo && state.currentFile && (
+            <ExportDialog
+              isOpen={state.exportDialogOpen}
+              onClose={handleCloseExportDialog}
+              fileInfo={state.fileInfo}
+              currentFile={state.currentFile}
+              selectedImages={state.selectedImages}
+              currentIndex={state.currentImageIndex}
+            />
+          )}
         </>
       ) : (
         state.editableSti && (
