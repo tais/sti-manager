@@ -33,7 +33,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   const [exportFormat, setExportFormat] = useState<ExportFormat>('BMP');
   const [exportPath, setExportPath] = useState('');
   const [imagesToExport, setImagesToExport] = useState<ImageMetadata[]>([]);
-  const [exportMode, setExportMode] = useState<'all' | 'selected' | 'current'>('all');
+  const [exportMode, setExportMode] = useState<'all' | 'selected'>('all');
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
   const [namingPattern, setNamingPattern] = useState('{filename}_{index}');
@@ -49,8 +49,6 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
       // Determine default export mode
       if (selectedImages.length > 0) {
         setExportMode('selected');
-      } else if (fileInfo.num_images === 1) {
-        setExportMode('current');
       } else {
         setExportMode('all');
       }
@@ -78,6 +76,11 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   };
 
   const handleImageToggle = (index: number) => {
+    // If we're in "all" mode and unchecking an item, switch to "selected" mode
+    if (exportMode === 'all') {
+      setExportMode('selected');
+    }
+    
     setImagesToExport(prev =>
       prev.map(img =>
         img.index === index ? { ...img, selected: !img.selected } : img
@@ -86,14 +89,21 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   };
 
   const handleSelectAll = () => {
-    setImagesToExport(prev => prev.map(img => ({ ...img, selected: true })));
+    // If we're in "all" mode, don't change individual selections
+    if (exportMode !== 'all') {
+      setImagesToExport(prev => prev.map(img => ({ ...img, selected: true })));
+    }
   };
 
   const handleSelectNone = () => {
+    // If we're in "all" mode and selecting none, switch to "selected" mode
+    if (exportMode === 'all') {
+      setExportMode('selected');
+    }
     setImagesToExport(prev => prev.map(img => ({ ...img, selected: false })));
   };
 
-  const handleExportModeChange = (mode: 'all' | 'selected' | 'current') => {
+  const handleExportModeChange = (mode: 'all' | 'selected') => {
     setExportMode(mode);
     
     if (mode === 'all') {
@@ -101,10 +111,6 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
     } else if (mode === 'selected') {
       setImagesToExport(prev =>
         prev.map(img => ({ ...img, selected: selectedImages.includes(img.index) }))
-      );
-    } else if (mode === 'current') {
-      setImagesToExport(prev =>
-        prev.map(img => ({ ...img, selected: img.index === currentIndex }))
       );
     }
   };
@@ -238,12 +244,12 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
               <label className="radio-option">
                 <input
                   type="radio"
-                  value="current"
-                  checked={exportMode === 'current'}
-                  onChange={() => handleExportModeChange('current')}
+                  value="selected"
+                  checked={exportMode === 'selected'}
+                  onChange={() => handleExportModeChange('selected')}
                   disabled={isExporting}
                 />
-                Current Image Only
+                Selected Images
               </label>
             </div>
           </div>
@@ -254,8 +260,18 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
               <div className="section-header">
                 <label>Select Images to Export ({selectedCount} selected):</label>
                 <div className="selection-buttons">
-                  <button onClick={handleSelectAll} disabled={isExporting}>All</button>
-                  <button onClick={handleSelectNone} disabled={isExporting}>None</button>
+                  <button
+                    onClick={handleSelectAll}
+                    disabled={isExporting || exportMode === 'all'}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={handleSelectNone}
+                    disabled={isExporting}
+                  >
+                    None
+                  </button>
                 </div>
               </div>
               
@@ -267,7 +283,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
                         type="checkbox"
                         checked={img.selected}
                         onChange={() => handleImageToggle(img.index)}
-                        disabled={isExporting}
+                        disabled={isExporting || exportMode === 'all'}
                       />
                       <span className="image-info">
                         #{img.index} ({img.width}×{img.height})
