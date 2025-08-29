@@ -20,6 +20,8 @@ interface ImageListProps {
   onImageToggleSelect: (index: number) => void;
   onClearSelection: () => void;
   onFileUpdated?: () => void; // Callback to refresh the file after operations
+  managementMode: boolean;
+  multiSelectMode: boolean;
 }
 
 const ImageList: React.FC<ImageListProps> = ({
@@ -31,11 +33,11 @@ const ImageList: React.FC<ImageListProps> = ({
   onImageToggleSelect,
   onClearSelection,
   onFileUpdated,
+  managementMode,
+  multiSelectMode,
 }) => {
   const [imageMetadata, setImageMetadata] = useState<ImageMetadata[]>([]);
   const [loading, setLoading] = useState(false);
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [managementMode, setManagementMode] = useState(false);
   
   // Staging system for reordering
   const [originalOrder, setOriginalOrder] = useState<number[]>([]);
@@ -73,6 +75,16 @@ const ImageList: React.FC<ImageListProps> = ({
       setHasUnsavedChanges(false);
     }
   }, [imageMetadata]);
+
+  // Reset staging changes when exiting management mode
+  useEffect(() => {
+    if (!managementMode && hasUnsavedChanges) {
+      handleCancelChanges();
+    }
+    if (!managementMode) {
+      onClearSelection();
+    }
+  }, [managementMode, hasUnsavedChanges, onClearSelection]);
 
   const loadImageMetadata = async () => {
     if (!currentFile || fileInfo.num_images === 0) return;
@@ -298,44 +310,6 @@ const ImageList: React.FC<ImageListProps> = ({
       <div className="image-list-header">
         <h3>Images ({fileInfo.num_images})</h3>
         
-        <div className="mode-controls">
-          <button
-            className={`mode-toggle ${managementMode ? 'active' : ''}`}
-            onClick={() => {
-              setDebugInfo(`🔧 Management mode button clicked - toggling to ${!managementMode}`);
-              const newMode = !managementMode;
-              setManagementMode(newMode);
-              if (!newMode) {
-                setMultiSelectMode(false);
-                onClearSelection();
-                // Reset staging when exiting management mode
-                if (hasUnsavedChanges) {
-                  handleCancelChanges();
-                }
-              }
-            }}
-            title={managementMode ? 'Exit management mode' : 'Enter management mode'}
-          >
-            {managementMode ? 'Manage ⚙️' : 'Manage 🔧'}
-          </button>
-          
-          {managementMode && (
-            <button
-              className={`mode-toggle ${multiSelectMode ? 'active' : ''}`}
-              onClick={() => {
-                setDebugInfo(`✓ Multi-select button clicked - toggling to ${!multiSelectMode}`);
-                const newMode = !multiSelectMode;
-                setMultiSelectMode(newMode);
-                if (!newMode && selectedImages.length > 0) {
-                  onClearSelection();
-                }
-              }}
-              title={multiSelectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
-            >
-              {multiSelectMode ? 'Select ✓' : 'Select □'}
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Save/Cancel controls for staged changes */}

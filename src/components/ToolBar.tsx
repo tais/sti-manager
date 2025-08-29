@@ -7,6 +7,12 @@ interface ToolBarProps {
   canExport: boolean;
   canEdit?: boolean;
   loading: boolean;
+  // Image management props
+  showImageManagement?: boolean;
+  managementMode?: boolean;
+  multiSelectMode?: boolean;
+  onToggleManagement?: () => void;
+  onToggleMultiSelect?: () => void;
 }
 
 const ToolBar: React.FC<ToolBarProps> = ({
@@ -15,7 +21,12 @@ const ToolBar: React.FC<ToolBarProps> = ({
   onEnterEditMode,
   canExport,
   canEdit,
-  loading
+  loading,
+  showImageManagement,
+  managementMode,
+  multiSelectMode,
+  onToggleManagement,
+  onToggleMultiSelect
 }) => {
   return (
     <div className="toolbar">
@@ -33,6 +44,28 @@ const ToolBar: React.FC<ToolBarProps> = ({
       </div>
       
       <div className="toolbar-section">
+        {showImageManagement && onToggleMultiSelect && managementMode && (
+          <button
+            onClick={onToggleMultiSelect}
+            disabled={loading}
+            className={`toolbar-button ${multiSelectMode ? 'active' : ''}`}
+            title={multiSelectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
+          >
+            {multiSelectMode ? 'Select' : 'Select'}
+          </button>
+        )}
+        
+        {showImageManagement && onToggleManagement && (
+          <button
+            onClick={onToggleManagement}
+            disabled={loading}
+            className={`toolbar-button ${managementMode ? 'active' : ''}`}
+            title={managementMode ? 'Exit management mode' : 'Enter management mode'}
+          >
+            {managementMode ? 'Manage' : 'Manage'}
+          </button>
+        )}
+        
         {canEdit && onEnterEditMode && (
           <button
             onClick={onEnterEditMode}
@@ -40,7 +73,7 @@ const ToolBar: React.FC<ToolBarProps> = ({
             className="toolbar-button"
             title="Enter Edit Mode"
           >
-            ✏️ Edit
+            Edit Mode
           </button>
         )}
         
@@ -51,7 +84,7 @@ const ToolBar: React.FC<ToolBarProps> = ({
             className="toolbar-button"
             title="Export Images"
           >
-            📤 Export
+            Export
           </button>
         )}
       </div>

@@ -46,6 +46,13 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
       const directoryPath = lastSlashIndex !== -1 ? currentFile.substring(0, lastSlashIndex) : '.';
       setExportPath(directoryPath);
       
+      // Set default naming pattern based on number of images
+      if (fileInfo.num_images === 1) {
+        setNamingPattern('{filename}'); // No index for single image
+      } else {
+        setNamingPattern('{filename}_{index}'); // Include index for multiple images
+      }
+      
       // Determine default export mode
       if (selectedImages.length > 0) {
         setExportMode('selected');
@@ -215,21 +222,33 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
             </select>
           </div>
 
-          {/* Export Mode Selection */}
-          <div className="export-section">
-            <label>Export Mode:</label>
-            <div className="export-mode-options">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  value="all"
-                  checked={exportMode === 'all'}
-                  onChange={() => handleExportModeChange('all')}
-                  disabled={isExporting}
-                />
-                All Images ({fileInfo.num_images})
-              </label>
-              {selectedImages.length > 0 && (
+          {/* Export Mode Selection - only show for multi-image STI files */}
+          {fileInfo.num_images > 1 && (
+            <div className="export-section">
+              <label>Export Mode:</label>
+              <div className="export-mode-options">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    value="all"
+                    checked={exportMode === 'all'}
+                    onChange={() => handleExportModeChange('all')}
+                    disabled={isExporting}
+                  />
+                  All Images ({fileInfo.num_images})
+                </label>
+                {selectedImages.length > 0 && (
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      value="selected"
+                      checked={exportMode === 'selected'}
+                      onChange={() => handleExportModeChange('selected')}
+                      disabled={isExporting}
+                    />
+                    Previously Selected ({selectedImages.length})
+                  </label>
+                )}
                 <label className="radio-option">
                   <input
                     type="radio"
@@ -238,21 +257,11 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
                     onChange={() => handleExportModeChange('selected')}
                     disabled={isExporting}
                   />
-                  Previously Selected ({selectedImages.length})
+                  Selected Images
                 </label>
-              )}
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  value="selected"
-                  checked={exportMode === 'selected'}
-                  onChange={() => handleExportModeChange('selected')}
-                  disabled={isExporting}
-                />
-                Selected Images
-              </label>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Image Selection */}
           {fileInfo.num_images > 1 && (

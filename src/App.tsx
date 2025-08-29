@@ -26,6 +26,8 @@ interface AppState {
   currentPath: string | null;
   selectedImages: number[];
   exportDialogOpen: boolean;
+  managementMode: boolean;
+  multiSelectMode: boolean;
 }
 
 function App() {
@@ -45,6 +47,8 @@ function App() {
     currentPath: null,
     selectedImages: [],
     exportDialogOpen: false,
+    managementMode: false,
+    multiSelectMode: false,
   });
 
   const handleFileSelect = async (filePath: string, forceReload = false) => {
@@ -295,6 +299,26 @@ function App() {
     }
   };
 
+  const handleToggleManagement = () => {
+    setState(prev => {
+      const newMode = !prev.managementMode;
+      return {
+        ...prev,
+        managementMode: newMode,
+        multiSelectMode: newMode ? prev.multiSelectMode : false,
+        selectedImages: newMode ? prev.selectedImages : [],
+      };
+    });
+  };
+
+  const handleToggleMultiSelect = () => {
+    setState(prev => ({
+      ...prev,
+      multiSelectMode: !prev.multiSelectMode,
+      selectedImages: !prev.multiSelectMode ? prev.selectedImages : [],
+    }));
+  };
+
   return (
     <div className="app">
       {!state.isEditMode ? (
@@ -306,6 +330,11 @@ function App() {
             canExport={state.imageData !== null}
             canEdit={state.currentFile !== null && !state.loading}
             loading={state.loading}
+            showImageManagement={state.fileInfo !== null && state.fileInfo.num_images > 1}
+            managementMode={state.managementMode}
+            multiSelectMode={state.multiSelectMode}
+            onToggleManagement={handleToggleManagement}
+            onToggleMultiSelect={handleToggleMultiSelect}
           />
           
           <div className="app-body">
@@ -380,6 +409,8 @@ function App() {
                   onImageToggleSelect={handleImageToggleSelect}
                   onClearSelection={handleClearSelection}
                   onFileUpdated={handleFileUpdated}
+                  managementMode={state.managementMode}
+                  multiSelectMode={state.multiSelectMode}
                 />
               )}
             </div>
