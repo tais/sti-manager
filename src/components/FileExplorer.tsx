@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { DirectoryApi } from '../services/api';
 import { DirectoryContents, DirectoryItem } from '../types/sti';
 import './FileExplorer.css';
@@ -12,14 +12,18 @@ interface FileExplorerProps {
   onCurrentPathChange?: (currentPath: string | null) => void;
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({
+export interface FileExplorerHandle {
+  refresh: () => void;
+}
+
+const FileExplorer = forwardRef<FileExplorerHandle, FileExplorerProps>(({
   onFileSelect,
   rootDirectory: propRootDirectory,
   currentPath: propCurrentPath,
   selectedFile,
   onRootDirectoryChange,
   onCurrentPathChange
-}) => {
+}, ref) => {
   const [rootDirectory, setRootDirectory] = useState<string | null>(propRootDirectory || null);
   const [currentPath, setCurrentPath] = useState<string>(propCurrentPath || propRootDirectory || '');
   const [directoryContents, setDirectoryContents] = useState<DirectoryContents | null>(null);
@@ -80,6 +84,17 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       setLoading(false);
     }
   };
+
+  const handleRefreshDirectory = async () => {
+    if (currentPath) {
+      await loadDirectory(currentPath);
+    }
+  };
+
+  // Expose refresh function to parent component
+  useImperativeHandle(ref, () => ({
+    refresh: handleRefreshDirectory
+  }), [handleRefreshDirectory]);
 
   // Scroll to selected file when directory contents change or selected file changes
   React.useEffect(() => {
@@ -161,8 +176,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               <span className="current-path" title={currentPath}>
                 {getRelativePath(currentPath)}
               </span>
-              <button 
-                onClick={handleSelectRootDirectory} 
+              <button
+                onClick={handleRefreshDirectory}
+                className="refresh-btn"
+                title="Refresh directory"
+                disabled={loading}
+              >
+                🔄
+              </button>
+              <button
+                onClick={handleSelectRootDirectory}
                 className="change-root-btn"
                 title="Change root directory"
               >
@@ -221,6 +244,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default FileExplorer;

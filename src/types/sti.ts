@@ -84,3 +84,20 @@ export interface EditableStiFile {
   transparent_color: number;
   flags: number;
 }
+
+// Image import types
+export interface ImageAnalysisResult {
+  width: number;
+  height: number;
+  format: string;
+  has_alpha: boolean;
+  color_count?: number; // None if too many colors to count efficiently
+  preview: string; // Base64 encoded thumbnail
+  file_size: number;
+}
+
+export interface ImportOptions {
+  palette_strategy: 'match' | 'regenerate' | 'auto'; // "match", "regenerate", or "auto"
+  compression: boolean; // Use ETRLE compression
+  transparent_color?: number; // Palette index for transparency
+}

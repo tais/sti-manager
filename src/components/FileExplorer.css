@@ -84,6 +84,29 @@
   cursor: text;
 }
 
+.refresh-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background-color: #444;
+  border: 1px solid #666;
+  color: #f6f6f6;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  transform: rotate(180deg);
+  background-color: #555;
+}
+
+.refresh-btn:disabled {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .change-root-btn {
   padding: 0.25rem 0.5rem;
   font-size: 0.8rem;

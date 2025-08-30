@@ -28,7 +28,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   fileInfo,
   currentFile,
   selectedImages = [],
-  currentIndex = 0,
+  currentIndex: _currentIndex = 0,
 }) => {
   const [exportFormat, setExportFormat] = useState<ExportFormat>('BMP');
   const [exportPath, setExportPath] = useState('');

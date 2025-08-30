@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
+use image::GenericImageView;
 
 mod sti;
 
@@ -304,6 +305,24 @@ pub struct EditableImage {
     pub width: u16,
     pub height: u16,
     pub data: Vec<u8>, // Palette indices for 8-bit, RGB565 bytes for 16-bit
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImageAnalysisResult {
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+    pub has_alpha: bool,
+    pub color_count: Option<usize>, // None if too many colors to count efficiently
+    pub preview: String, // Base64 encoded thumbnail
+    pub file_size: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportOptions {
+    pub palette_strategy: String, // "match", "regenerate", or "auto"
+    pub compression: bool, // Use ETRLE compression
+    pub transparent_color: Option<u8>, // Palette index for transparency
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1150,6 +1169,328 @@ async fn clear_sti_cache() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn check_file_exists(file_path: String) -> Result<bool, String> {
+    let path = Path::new(&file_path);
+    Ok(path.exists())
+}
+
+#[tauri::command]
+async fn analyze_image_for_import(image_path: String) -> Result<ImageAnalysisResult, String> {
+    use std::io::Cursor;
+    
+    let path = Path::new(&image_path);
+    if !path.exists() {
+        return Err("Image file does not exist".to_string());
+    }
+
+    let file_data = fs::read(path)
+        .map_err(|e| format!("Failed to read image file: {}", e))?;
+    
+    let file_size = file_data.len() as u64;
+
+    // Use the image crate to decode the image
+    let img = image::load_from_memory(&file_data)
+        .map_err(|e| format!("Failed to decode image: {}", e))?;
+
+    let format = match image::guess_format(&file_data) {
+        Ok(fmt) => format!("{:?}", fmt),
+        Err(_) => "Unknown".to_string(),
+    };
+
+    let (width, height) = img.dimensions();
+    let has_alpha = img.color().has_alpha();
+
+    // Convert to RGB for analysis
+    let rgb_img = img.to_rgb8();
+    
+    // Count unique colors (limit to avoid performance issues)
+    let mut unique_colors = std::collections::HashSet::new();
+    let max_color_count = 10000; // Limit for performance
+    
+    for pixel in rgb_img.pixels() {
+        if unique_colors.len() >= max_color_count {
+            break;
+        }
+        unique_colors.insert((pixel[0], pixel[1], pixel[2]));
+    }
+    
+    let color_count = if unique_colors.len() < max_color_count {
+        Some(unique_colors.len())
+    } else {
+        None
+    };
+
+    // Generate thumbnail preview (max 150x150)
+    let thumbnail = if width > 150 || height > 150 {
+        img.thumbnail(150, 150)
+    } else {
+        img
+    };
+    
+    let thumbnail_rgb = thumbnail.to_rgb8();
+    let mut png_data = Vec::new();
+    let mut cursor = Cursor::new(&mut png_data);
+    
+    thumbnail_rgb.write_to(&mut cursor, image::ImageOutputFormat::Png)
+        .map_err(|e| format!("Failed to generate thumbnail: {}", e))?;
+    
+    use base64::Engine;
+    let preview_base64 = base64::engine::general_purpose::STANDARD.encode(png_data);
+
+    Ok(ImageAnalysisResult {
+        width,
+        height,
+        format,
+        has_alpha,
+        color_count,
+        preview: format!("data:image/png;base64,{}", preview_base64),
+        file_size,
+    })
+}
+
+#[tauri::command]
+async fn import_image_to_new_sti(
+    _app: tauri::AppHandle,
+    source_path: String,
+    destination_path: String,
+    options: ImportOptions
+) -> Result<(), String> {
+    // Load and decode the source image
+    let source_data = fs::read(&source_path)
+        .map_err(|e| format!("Failed to read source image: {}", e))?;
+    
+    let img = image::load_from_memory(&source_data)
+        .map_err(|e| format!("Failed to decode source image: {}", e))?;
+
+    let rgb_img = img.to_rgb8();
+    let (width, height) = rgb_img.dimensions();
+    
+    // Convert to 8-bit indexed format with palette
+    let (palette_data, indexed_data) = quantize_image_to_palette(&rgb_img, options.transparent_color)?;
+    
+    // Create new STI file structure
+    let mut sti_file = sti::StiFile::new();
+    
+    // Set up 8-bit indexed header
+    sti_file.header.signature = [b'S', b'T', b'C', b'I'];
+    sti_file.header.flags.indexed = true;
+    sti_file.header.flags.rgb = false;
+    sti_file.header.flags.etrle_compressed = options.compression;
+    sti_file.header.palette_colors = 256;
+    sti_file.header.num_images = 1;
+    sti_file.header.color_depth = 8;
+    sti_file.header.width = width as u16;
+    sti_file.header.height = height as u16;
+    sti_file.header.transparent_color = options.transparent_color.unwrap_or(0) as u32;
+    
+    // Set palette
+    sti_file.palette = Some(palette_data);
+    
+    // Create image with sub-header
+    let sub_header = sti::StiSubImageHeader {
+        data_offset: 0,
+        data_size: 0, // Will be set during compression
+        offset_x: 0,
+        offset_y: 0,
+        height: height as u16,
+        width: width as u16,
+    };
+    
+    let mut image = sti::StiImage::with_header(sub_header);
+    image.decompressed_data = Some(indexed_data);
+    image.width = width as u16;
+    image.height = height as u16;
+    
+    sti_file.images.push(image);
+    
+    // Convert to editable format for saving
+    let editable_sti = convert_sti_to_editable(&sti_file)?;
+    
+    // Save the new STI file
+    save_sti_file(destination_path, editable_sti).await?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn import_image_to_existing_sti(
+    source_path: String,
+    sti_path: String,
+    insert_position: Option<usize>,
+    options: ImportOptions
+) -> Result<(), String> {
+    // Create backup first
+    let _backup_path = create_sti_backup(sti_path.clone()).await?;
+    
+    // Load the existing STI file
+    let cached_file = {
+        let cache = STI_CACHE.lock().unwrap();
+        cache.get(&sti_path).cloned()
+    };
+    
+    let mut sti_file = if let Some(cached) = cached_file {
+        (*cached).clone()
+    } else {
+        let path = Path::new(&sti_path);
+        let file_data = fs::read(path)
+            .map_err(|e| format!("Failed to read STI file: {}", e))?;
+        sti::StiParser::parse(&file_data)
+            .map_err(|e| format!("Failed to parse STI file: {}", e))?
+    };
+    
+    // Only support adding to 8-bit STI files for now
+    if !sti_file.is_8bit() {
+        return Err("Can only import images into 8-bit STI files".to_string());
+    }
+    
+    // Load and decode the source image
+    let source_data = fs::read(&source_path)
+        .map_err(|e| format!("Failed to read source image: {}", e))?;
+
+    let img = image::load_from_memory(&source_data)
+        .map_err(|e| format!("Failed to decode source image: {}", e))?;
+
+    let rgb_img = img.to_rgb8();
+    let (width, height) = rgb_img.dimensions();
+    
+    // Convert image to match existing palette
+    let existing_palette = sti_file.palette.as_ref()
+        .ok_or("STI file missing palette")?;
+    
+    let indexed_data = match options.palette_strategy.as_str() {
+        "match" => {
+            // Quantize to match existing palette
+            quantize_to_existing_palette(&rgb_img, existing_palette)?
+        },
+        "regenerate" => {
+            return Err("Palette regeneration not implemented yet".to_string());
+        },
+        _ => {
+            // Auto: use match strategy for existing files
+            quantize_to_existing_palette(&rgb_img, existing_palette)?
+        }
+    };
+    
+    // Create new image with sub-header
+    let sub_header = sti::StiSubImageHeader {
+        data_offset: 0, // Will be recalculated during save
+        data_size: 0,   // Will be set during compression
+        offset_x: 0,
+        offset_y: 0,
+        height: height as u16,
+        width: width as u16,
+    };
+    
+    let mut new_image = sti::StiImage::with_header(sub_header);
+    new_image.decompressed_data = Some(indexed_data);
+    new_image.width = width as u16;
+    new_image.height = height as u16;
+    
+    // Insert at specified position or at the end
+    let insert_pos = insert_position.unwrap_or(sti_file.images.len());
+    let insert_pos = insert_pos.min(sti_file.images.len());
+    
+    sti_file.images.insert(insert_pos, new_image);
+    sti_file.header.num_images = sti_file.images.len() as u16;
+    
+    // Save the modified STI file
+    save_modified_sti_file(&sti_path, &sti_file).await?;
+    
+    Ok(())
+}
+
+// Color quantization functions
+
+fn quantize_image_to_palette(rgb_img: &image::RgbImage, transparent_color: Option<u8>) -> Result<([[u8; 3]; 256], Vec<u8>), String> {
+    use std::collections::HashMap;
+    
+    let (width, height) = rgb_img.dimensions();
+    let mut color_histogram = HashMap::new();
+    
+    // Count color frequency
+    for pixel in rgb_img.pixels() {
+        let rgb = (pixel[0], pixel[1], pixel[2]);
+        *color_histogram.entry(rgb).or_insert(0) += 1;
+    }
+    
+    // Sort colors by frequency (most used first)
+    let mut sorted_colors: Vec<_> = color_histogram.into_iter().collect();
+    sorted_colors.sort_by(|a, b| b.1.cmp(&a.1));
+    
+    // Create palette (limit to 256 colors)
+    let mut palette = [[0u8; 3]; 256];
+    let mut color_to_index = HashMap::new();
+    
+    // Reserve index 0 for transparent color if specified
+    let start_index = if transparent_color.is_some() {
+        palette[0] = [0, 0, 0]; // Black for transparent
+        color_to_index.insert((0, 0, 0), 0u8);
+        1
+    } else {
+        0
+    };
+    
+    // Fill palette with most common colors
+    for (i, &(rgb, _)) in sorted_colors.iter().enumerate().take(256 - start_index) {
+        let palette_index = i + start_index;
+        palette[palette_index] = [rgb.0, rgb.1, rgb.2];
+        color_to_index.insert(rgb, palette_index as u8);
+    }
+    
+    // Convert image to indexed format
+    let mut indexed_data = Vec::with_capacity((width * height) as usize);
+    
+    for pixel in rgb_img.pixels() {
+        let rgb = (pixel[0], pixel[1], pixel[2]);
+        
+        let palette_index = if let Some(&index) = color_to_index.get(&rgb) {
+            index
+        } else {
+            // Find closest color in palette
+            find_closest_palette_color(&palette, rgb)
+        };
+        
+        indexed_data.push(palette_index);
+    }
+    
+    Ok((palette, indexed_data))
+}
+
+fn quantize_to_existing_palette(rgb_img: &image::RgbImage, palette: &[[u8; 3]; 256]) -> Result<Vec<u8>, String> {
+    let (width, height) = rgb_img.dimensions();
+    let mut indexed_data = Vec::with_capacity((width * height) as usize);
+    
+    for pixel in rgb_img.pixels() {
+        let rgb = (pixel[0], pixel[1], pixel[2]);
+        let palette_index = find_closest_palette_color(palette, rgb);
+        indexed_data.push(palette_index);
+    }
+    
+    Ok(indexed_data)
+}
+
+fn find_closest_palette_color(palette: &[[u8; 3]; 256], target_rgb: (u8, u8, u8)) -> u8 {
+    let mut best_index = 0;
+    let mut best_distance = u32::MAX;
+    
+    for (i, &color) in palette.iter().enumerate() {
+        let dr = (color[0] as i32 - target_rgb.0 as i32).abs() as u32;
+        let dg = (color[1] as i32 - target_rgb.1 as i32).abs() as u32;
+        let db = (color[2] as i32 - target_rgb.2 as i32).abs() as u32;
+        
+        // Simple Euclidean distance
+        let distance = dr * dr + dg * dg + db * db;
+        
+        if distance < best_distance {
+            best_distance = distance;
+            best_index = i;
+        }
+    }
+    
+    best_index as u8
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1175,7 +1516,11 @@ pub fn run() {
             remove_images_from_sti,
             create_sti_backup,
             validate_sti_integrity,
-            restore_sti_from_backup
+            restore_sti_from_backup,
+            check_file_exists,
+            analyze_image_for_import,
+            import_image_to_new_sti,
+            import_image_to_existing_sti
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

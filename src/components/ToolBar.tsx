@@ -3,8 +3,10 @@ import React from 'react';
 interface ToolBarProps {
   onToggleSidebar: () => void;
   onExport: () => void;
+  onImport?: () => void;
   onEnterEditMode?: () => void;
   canExport: boolean;
+  canImport?: boolean;
   canEdit?: boolean;
   loading: boolean;
   // Image management props
@@ -18,8 +20,10 @@ interface ToolBarProps {
 const ToolBar: React.FC<ToolBarProps> = ({
   onToggleSidebar,
   onExport,
+  onImport,
   onEnterEditMode,
   canExport,
+  canImport,
   canEdit,
   loading,
   showImageManagement,
@@ -74,6 +78,17 @@ const ToolBar: React.FC<ToolBarProps> = ({
             title="Enter Edit Mode"
           >
             Edit Mode
+          </button>
+        )}
+        
+        {canImport && onImport && (
+          <button
+            onClick={onImport}
+            disabled={loading}
+            className="toolbar-button"
+            title="Import Image"
+          >
+            Import
           </button>
         )}
         

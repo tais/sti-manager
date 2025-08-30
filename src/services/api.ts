@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { StiFileInfo, StiImageData, StiMetadata, DirectoryContents, EditableStiFile, EditableImage } from '../types/sti';
+import { StiFileInfo, StiImageData, StiMetadata, DirectoryContents, EditableStiFile, EditableImage, ImageAnalysisResult, ImportOptions } from '../types/sti';
 
 export class StiApi {
   static async openStiFile(filePath: string): Promise<StiFileInfo> {
@@ -89,6 +89,34 @@ export class StiEditingApi {
   }
 }
 
+export class ImageImportApi {
+  static async analyzeImageForImport(imagePath: string): Promise<ImageAnalysisResult> {
+    return await invoke('analyze_image_for_import', { imagePath });
+  }
+
+  static async importImageToNewSti(
+    sourcePath: string,
+    destinationPath: string,
+    options: ImportOptions
+  ): Promise<void> {
+    return await invoke('import_image_to_new_sti', { sourcePath, destinationPath, options });
+  }
+
+  static async importImageToExistingSti(
+    sourcePath: string,
+    stiPath: string,
+    insertPosition?: number,
+    options?: ImportOptions
+  ): Promise<void> {
+    return await invoke('import_image_to_existing_sti', {
+      sourcePath,
+      stiPath,
+      insertPosition,
+      options
+    });
+  }
+}
+
 export class FileSystem {
   // Placeholder for file system operations
   // In a real implementation, these would use Tauri's file system APIs
@@ -101,5 +129,9 @@ export class FileSystem {
   static async saveFileDialog(): Promise<string | null> {
     // This would use Tauri's dialog plugin
     return null;
+  }
+
+  static async checkFileExists(filePath: string): Promise<boolean> {
+    return await invoke('check_file_exists', { filePath });
   }
 }

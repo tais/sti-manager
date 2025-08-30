@@ -49,7 +49,6 @@ const ImageList: React.FC<ImageListProps> = ({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   
   // Debug state for UI feedback - remove after testing
-  const [debugInfo, setDebugInfo] = useState<string>('Range selection ready');
   
   const [confirmationDialog, setConfirmationDialog] = useState<Omit<ConfirmationDialogProps, 'onConfirm' | 'onCancel'> & {
     isOpen: boolean;

@@ -37,4 +37,5 @@ image = "0.24"
 byteorder = "1.5"
 thiserror = "1.0"
 lazy_static = "1.4"
+base64 = "0.21"
 

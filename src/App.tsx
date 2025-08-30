@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import './App.css';
 import { StiFileInfo, StiImageData, StiMetadata, EditableStiFile } from './types/sti';
 import { StiApi, StiEditingApi, DirectoryApi } from './services/api';
-import FileExplorer from './components/FileExplorer';
+import FileExplorer, { FileExplorerHandle } from './components/FileExplorer';
 import ImageViewer from './components/ImageViewer';
 import ImageEditor from './components/ImageEditor';
 import MetadataPanel from './components/MetadataPanel';
 import ToolBar from './components/ToolBar';
 import ImageList from './components/ImageList';
 import ExportDialog from './components/ExportDialog';
+import { ImageImportDialog } from './components/ImageImportDialog';
 
 interface AppState {
   currentFile: string | null;
@@ -26,11 +27,13 @@ interface AppState {
   currentPath: string | null;
   selectedImages: number[];
   exportDialogOpen: boolean;
+  importDialogOpen: boolean;
   managementMode: boolean;
   multiSelectMode: boolean;
 }
 
 function App() {
+  const fileExplorerRef = useRef<FileExplorerHandle>(null);
   const [state, setState] = useState<AppState>({
     currentFile: null,
     fileInfo: null,
@@ -47,6 +50,7 @@ function App() {
     currentPath: null,
     selectedImages: [],
     exportDialogOpen: false,
+    importDialogOpen: false,
     managementMode: false,
     multiSelectMode: false,
   });
@@ -119,10 +123,26 @@ function App() {
     setState(prev => ({ ...prev, exportDialogOpen: false }));
   };
 
-  // Legacy export function for backward compatibility with ToolBar
-  const handleExport = async (format: string) => {
-    handleOpenExportDialog();
+  const handleOpenImportDialog = () => {
+    setState(prev => ({ ...prev, importDialogOpen: true }));
   };
+
+  const handleCloseImportDialog = () => {
+    setState(prev => ({ ...prev, importDialogOpen: false }));
+  };
+
+  const handleImportComplete = async () => {
+    // Refresh the current file if we're viewing one
+    if (state.currentFile) {
+      await handleFileUpdated();
+    }
+    
+    // Refresh the file explorer to show new files
+    if (fileExplorerRef.current) {
+      fileExplorerRef.current.refresh();
+    }
+  };
+
 
   const handleEnterEditMode = async () => {
     if (!state.currentFile) return;
@@ -225,9 +245,6 @@ function App() {
     setState(prev => ({ ...prev, sidebarVisible: !prev.sidebarVisible }));
   };
 
-  const toggleImageList = () => {
-    setState(prev => ({ ...prev, imageListVisible: !prev.imageListVisible }));
-  };
 
   const handleImageSelect = async (index: number) => {
     await handleImageIndexChange(index);
@@ -326,8 +343,10 @@ function App() {
           <ToolBar
             onToggleSidebar={toggleSidebar}
             onExport={handleOpenExportDialog}
+            onImport={handleOpenImportDialog}
             onEnterEditMode={handleEnterEditMode}
             canExport={state.imageData !== null}
+            canImport={state.rootDirectory !== null}
             canEdit={state.currentFile !== null && !state.loading}
             loading={state.loading}
             showImageManagement={state.fileInfo !== null && state.fileInfo.num_images > 1}
@@ -341,6 +360,7 @@ function App() {
             {state.sidebarVisible && (
               <div className="sidebar">
                 <FileExplorer
+                  ref={fileExplorerRef}
                   onFileSelect={handleFileSelect}
                   rootDirectory={state.rootDirectory}
                   currentPath={state.currentPath}
@@ -427,6 +447,14 @@ function App() {
               currentIndex={state.currentImageIndex}
             />
           )}
+          
+          {/* Import Dialog */}
+          <ImageImportDialog
+            isOpen={state.importDialogOpen}
+            onClose={handleCloseImportDialog}
+            onImportComplete={handleImportComplete}
+            currentStiPath={state.currentFile ?? undefined}
+          />
         </>
       ) : (
         state.editableSti && (
