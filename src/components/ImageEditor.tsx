@@ -44,6 +44,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const [showTransparent, setShowTransparent] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [strokeStarted, setStrokeStarted] = useState(false);
+  const [cursorPos, setCursorPos] = useState<{ x: number, y: number } | null>(null);
 
   // Undo/Redo history system
   const [historyState, setHistoryState] = useState(() => {
@@ -65,7 +66,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
 
   useEffect(() => {
     drawCanvas();
-  }, [currentImage, zoom, pan, showGrid, showTransparent]);
+  }, [currentImage, zoom, pan, showGrid, showTransparent, cursorPos, tool]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -200,7 +201,26 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       
       ctx.stroke();
     }
-  }, [currentImage, zoom, pan, showGrid, showTransparent, editableSti.is_8bit, editableSti.palette]);
+    
+    // Draw brush cursor if hovering and using brush/eraser tools
+    if (cursorPos && (tool.type === 'brush' || tool.type === 'eraser') && tool.size > 1) {
+      const brushSize = tool.size;
+      const radius = Math.floor(brushSize / 2);
+      
+      ctx.strokeStyle = tool.type === 'brush' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 100, 100, 0.9)';
+      ctx.lineWidth = 2; // Make lines thicker
+      ctx.setLineDash([3, 3]); // Slightly longer dash pattern for visibility
+      
+      // Draw brush preview rectangle
+      const previewX = x + (cursorPos.x - radius) * zoom;
+      const previewY = y + (cursorPos.y - radius) * zoom;
+      const previewWidth = brushSize * zoom;
+      const previewHeight = brushSize * zoom;
+      
+      ctx.strokeRect(previewX, previewY, previewWidth, previewHeight);
+      ctx.setLineDash([]); // Reset line dash
+    }
+  }, [currentImage, zoom, pan, showGrid, showTransparent, editableSti.is_8bit, editableSti.palette, cursorPos, tool]);
 
   // Handle window resize by redrawing canvas
   useEffect(() => {
@@ -301,28 +321,43 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     setTimeout(() => setIsHistoryAction(false), 0);
   }, [historyIndex, history, onUpdate, onImageChange]);
 
-  const paintPixel = (x: number, y: number) => {
+  const paintPixel = (centerX: number, centerY: number) => {
     const newImageData = [...currentImage.data];
+    const brushSize = tool.size;
+    const radius = Math.floor(brushSize / 2);
     
-    if (editableSti.is_8bit) {
-      const dataIndex = y * currentImage.width + x;
-      if (tool.type === 'brush') {
-        newImageData[dataIndex] = selectedColor;
-      } else if (tool.type === 'eraser') {
-        newImageData[dataIndex] = 0; // Transparent color
-      }
-    } else {
-      // 16-bit RGB565 painting would be more complex
-      // For now, simplified implementation
-      const dataIndex = (y * currentImage.width + x) * 2;
-      if (tool.type === 'brush' && editableSti.palette && selectedColor < editableSti.palette.length) {
-        const color = editableSti.palette[selectedColor];
-        const r = Math.floor(color[0] / 8);
-        const g = Math.floor(color[1] / 4);
-        const b = Math.floor(color[2] / 8);
-        const rgb565 = (r << 11) | (g << 5) | b;
-        newImageData[dataIndex] = rgb565 & 0xFF;
-        newImageData[dataIndex + 1] = (rgb565 >> 8) & 0xFF;
+    // Paint in a square pattern around the center point
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = centerX + dx;
+        const y = centerY + dy;
+        
+        // Check bounds
+        if (x < 0 || x >= currentImage.width || y < 0 || y >= currentImage.height) {
+          continue;
+        }
+        
+        if (editableSti.is_8bit) {
+          const dataIndex = y * currentImage.width + x;
+          if (tool.type === 'brush') {
+            newImageData[dataIndex] = selectedColor;
+          } else if (tool.type === 'eraser') {
+            newImageData[dataIndex] = 0; // Transparent color
+          }
+        } else {
+          // 16-bit RGB565 painting would be more complex
+          // For now, simplified implementation
+          const dataIndex = (y * currentImage.width + x) * 2;
+          if (tool.type === 'brush' && editableSti.palette && selectedColor < editableSti.palette.length) {
+            const color = editableSti.palette[selectedColor];
+            const r = Math.floor(color[0] / 8);
+            const g = Math.floor(color[1] / 4);
+            const b = Math.floor(color[2] / 8);
+            const rgb565 = (r << 11) | (g << 5) | b;
+            newImageData[dataIndex] = rgb565 & 0xFF;
+            newImageData[dataIndex + 1] = (rgb565 >> 8) & 0xFF;
+          }
+        }
       }
     }
 
@@ -374,8 +409,11 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Always update cursor position for brush preview
+    const coords = getPixelCoordinates(e.clientX, e.clientY);
+    setCursorPos(coords);
+    
     if (isDrawing) {
-      const coords = getPixelCoordinates(e.clientX, e.clientY);
       if (coords) {
         paintPixel(coords.x, coords.y);
       }
@@ -562,6 +600,23 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
                 ✋ Pan
               </button>
             </div>
+            
+            {(tool.type === 'brush' || tool.type === 'eraser') && (
+              <div className="brush-size-panel">
+                <h4>Brush Size: {tool.size}x{tool.size}</h4>
+                <div className="brush-size-presets">
+                  {[1, 3, 5, 7, 9, 11].map(size => (
+                    <button
+                      key={size}
+                      className={`size-preset ${tool.size === size ? 'active' : ''}`}
+                      onClick={() => setTool({ ...tool, size })}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {editableSti.is_8bit && editableSti.palette && (
@@ -616,7 +671,10 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onMouseLeave={() => {
+              handleMouseUp();
+              setCursorPos(null); // Hide cursor when leaving canvas
+            }}
           />
         </div>
       </div>

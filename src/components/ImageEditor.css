@@ -198,6 +198,86 @@
   border-color: #0056b3;
 }
 
+/* Brush size controls */
+.brush-size-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #555;
+}
+
+.brush-size-panel h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #ccc;
+  font-weight: normal;
+}
+
+.brush-size-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.brush-size-controls button {
+  background: #444;
+  border: 1px solid #666;
+  color: #f6f6f6;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  min-width: 24px;
+  transition: background-color 0.2s;
+}
+
+.brush-size-controls button:hover:not(:disabled) {
+  background: #555;
+}
+
+.brush-size-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.size-display {
+  font-size: 12px;
+  color: #ccc;
+  font-family: monospace;
+  min-width: 40px;
+  text-align: center;
+  padding: 0 4px;
+}
+
+.brush-size-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.size-preset {
+  background: #444;
+  border: 1px solid #666;
+  color: #f6f6f6;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  min-width: 24px;
+  text-align: center;
+  transition: background-color 0.2s;
+}
+
+.size-preset:hover {
+  background: #555;
+}
+
+.size-preset.active {
+  background: #007bff;
+  border-color: #0056b3;
+}
+
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(16, 1fr);
