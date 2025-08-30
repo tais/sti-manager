@@ -52,9 +52,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: 'App v__VERSION__'
+          tagName: ${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          releaseName: 'STI-Manager ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
+          releaseDraft: false
+          prerelease: true
           args: ${{ matrix.args }}
