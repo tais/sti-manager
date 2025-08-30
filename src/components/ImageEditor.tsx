@@ -208,7 +208,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
       const radius = Math.floor(brushSize / 2);
       
       ctx.strokeStyle = tool.type === 'brush' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 100, 100, 0.9)';
-      ctx.lineWidth = 2; // Make lines thicker
+      ctx.lineWidth = 3; // Make lines thicker
       ctx.setLineDash([3, 3]); // Slightly longer dash pattern for visibility
       
       // Draw brush preview rectangle
@@ -605,7 +605,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
               <div className="brush-size-panel">
                 <h4>Brush Size: {tool.size}x{tool.size}</h4>
                 <div className="brush-size-presets">
-                  {[1, 3, 5, 7, 9, 11].map(size => (
+                  {[1, 3, 5, 7, 9, 11, 13].map(size => (
                     <button
                       key={size}
                       className={`size-preset ${tool.size === size ? 'active' : ''}`}

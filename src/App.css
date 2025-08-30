@@ -117,6 +117,11 @@ body {
   background: #555;
 }
 
+.toolbar-button.active {
+  background: #777;
+  border-color: #777;
+}
+
 .toolbar-button-menu {
   background: #444;
   border: 1px solid #555;
