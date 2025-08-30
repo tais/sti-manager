@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { EditableImage, EditableStiFile } from '../types/sti';
 import { StiEditingApi } from '../services/api';
 import './ImageEditor.css';
@@ -15,6 +15,13 @@ interface ImageEditorProps {
 interface PaintTool {
   type: 'brush' | 'eraser' | 'fill' | 'eyedropper' | 'pan';
   size: number;
+}
+
+interface HistoryState {
+  editableSti: EditableStiFile;
+  currentImageIndex: number;
+  timestamp: number;
+  actionDescription: string;
 }
 
 const ImageEditor: React.FC<ImageEditorProps> = ({
@@ -36,12 +43,48 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   const [showGrid, setShowGrid] = useState(true);
   const [showTransparent, setShowTransparent] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [strokeStarted, setStrokeStarted] = useState(false);
 
+  // Undo/Redo history system
+  const [historyState, setHistoryState] = useState(() => {
+    const initialState: HistoryState = {
+      editableSti: JSON.parse(JSON.stringify(editableSti)),
+      currentImageIndex,
+      timestamp: Date.now(),
+      actionDescription: 'Initial state'
+    };
+    return {
+      history: [initialState],
+      index: 0
+    };
+  });
+  const [isHistoryAction, setIsHistoryAction] = useState(false);
+
+  const { history, index: historyIndex } = historyState;
   const currentImage = editableSti.images[currentImageIndex];
 
   useEffect(() => {
     drawCanvas();
   }, [currentImage, zoom, pan, showGrid, showTransparent]);
+
+  // Add keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+      
+      if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (ctrlOrCmd && (e.shiftKey && e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyIndex, history]);
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -194,6 +237,70 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
     return null;
   };
 
+  // Save current state to history
+  const saveToHistory = useCallback((actionDescription: string) => {
+    if (isHistoryAction) return; // Don't save history actions to history
+    
+    const newState: HistoryState = {
+      editableSti: JSON.parse(JSON.stringify(editableSti)),
+      currentImageIndex,
+      timestamp: Date.now(),
+      actionDescription
+    };
+
+    setHistoryState(prevState => {
+      // Remove any states after current index (when undoing then making new changes)
+      const newHistory = prevState.history.slice(0, prevState.index + 1);
+      newHistory.push(newState);
+
+      // Limit history size to prevent memory issues (keep last 50 states)
+      let newIndex = newHistory.length - 1;
+      if (newHistory.length > 50) {
+        newHistory.shift();
+        newIndex = 49;
+      }
+
+      return {
+        history: newHistory,
+        index: newIndex
+      };
+    });
+  }, [editableSti, currentImageIndex, isHistoryAction]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex <= 0) return;
+    
+    const previousState = history[historyIndex - 1];
+    setIsHistoryAction(true);
+    
+    onUpdate(previousState.editableSti);
+    onImageChange(previousState.currentImageIndex);
+    
+    setHistoryState(prev => ({
+      ...prev,
+      index: prev.index - 1
+    }));
+    
+    setTimeout(() => setIsHistoryAction(false), 0);
+  }, [historyIndex, history, onUpdate, onImageChange]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    
+    const nextState = history[historyIndex + 1];
+    setIsHistoryAction(true);
+    
+    onUpdate(nextState.editableSti);
+    onImageChange(nextState.currentImageIndex);
+    
+    setHistoryState(prev => ({
+      ...prev,
+      index: prev.index + 1
+    }));
+    
+    setTimeout(() => setIsHistoryAction(false), 0);
+  }, [historyIndex, history, onUpdate, onImageChange]);
+
   const paintPixel = (x: number, y: number) => {
     const newImageData = [...currentImage.data];
     
@@ -255,7 +362,9 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
         return;
       }
 
+      // Start drawing - don't save to history yet, do it after stroke completion
       setIsDrawing(true);
+      setStrokeStarted(true);
       paintPixel(coords.x, coords.y);
     } else {
       setIsDragging(true);
@@ -279,8 +388,16 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const handleMouseUp = () => {
+    const wasDrawing = isDrawing;
     setIsDrawing(false);
     setIsDragging(false);
+    
+    // Save the completed stroke to history AFTER it's finished
+    if (wasDrawing && strokeStarted && (tool.type === 'brush' || tool.type === 'eraser')) {
+      // The state is now complete, save it to history
+      saveToHistory(`Completed ${tool.type} stroke`);
+    }
+    setStrokeStarted(false);
   };
 
   const handleSave = async () => {
@@ -294,6 +411,9 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const addNewImage = () => {
+    // Save state before making changes
+    saveToHistory('Before adding new image');
+    
     const newImage: EditableImage = {
       width: 64,
       height: 64,
@@ -312,6 +432,9 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
 
   const deleteCurrentImage = () => {
     if (editableSti.images.length <= 1) return; // Don't delete the last image
+
+    // Save state before making changes
+    saveToHistory(`Before deleting image ${currentImageIndex + 1}`);
 
     const updatedSti = {
       ...editableSti,
@@ -375,6 +498,28 @@ const ImageEditor: React.FC<ImageEditorProps> = ({
           <button onClick={() => setZoom(Math.min(32, zoom * 2))}>+</button>
           <button onClick={fitToWindow}>Fit</button>
           <span className="zoom-info">{Math.round(zoom * 100)}%</span>
+        </div>
+
+        <div className="editor-history-controls">
+          <button
+            onClick={handleUndo}
+            disabled={historyIndex <= 0}
+            title="Undo (Ctrl/Cmd+Z)"
+            className="history-button"
+          >
+            ↶ Undo
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={historyIndex >= history.length - 1}
+            title="Redo (Ctrl/Cmd+Y)"
+            className="history-button"
+          >
+            ↷ Redo
+          </button>
+          <span className="history-info">
+            {history.length > 0 ? `${historyIndex + 1}/${history.length}` : '0/0'}
+          </span>
         </div>
 
         <div className="editor-actions">

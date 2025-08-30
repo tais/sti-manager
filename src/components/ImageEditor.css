@@ -69,6 +69,48 @@
   text-align: center;
 }
 
+.editor-history-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-left: 1px solid #555;
+  padding-left: 16px;
+  margin-left: 8px;
+}
+
+.history-button {
+  background: #444;
+  border: 1px solid #666;
+  color: #f6f6f6;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.history-button:hover:not(:disabled) {
+  background: #555;
+}
+
+.history-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: #888;
+}
+
+.history-info {
+  font-size: 11px;
+  color: #bbb;
+  font-family: monospace;
+  min-width: 40px;
+  text-align: center;
+  padding: 0 4px;
+}
+
 .unsaved-indicator {
   color: #ff6b6b;
   font-size: 18px;

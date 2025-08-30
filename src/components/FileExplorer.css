@@ -94,7 +94,6 @@
 }
 
 .refresh-btn:hover:not(:disabled) {
-  transform: rotate(180deg);
   background-color: #555;
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "sti-manager"
-version = "0.0.0-git"
+version = "0.0.1"
 description = "STI File Manager for Jagged Alliance 2"
 authors = ["STI Manager Team"]
 edition = "2021"

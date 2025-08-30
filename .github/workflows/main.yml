@@ -45,16 +45,6 @@ jobs:
         # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
         # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
 
-      - name: Set Cargo.toml version
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref }}
-        run: |
-          mv Cargo.toml Cargo.toml.orig
-          sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
-          mv Cargo.lock Cargo.lock.orig
-          sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
-
       - name: install frontend dependencies
         run: npm install # change this to npm, pnpm or bun depending on which one you use.
 
@@ -62,9 +52,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'STI-Manager v__VERSION__'
+          tagName: ${{ github.ref }}
+          releaseName: 'STI-Manager ${{ github.ref }}'
           releaseBody: 'See the assets to download this version and install.'
+          assetNamePattern: '[name]x[platform]x[arch]x[mode]x[ext]'
           releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
