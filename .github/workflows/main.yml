@@ -55,7 +55,7 @@ jobs:
           tagName: ${{ github.ref }}
           releaseName: 'STI-Manager ${{ github.ref }}'
           releaseBody: 'See the assets to download this version and install.'
-          assetNamePattern: '[name]x[platform]x[arch]x[mode]x[ext]'
+          assetNamePattern: '[name].[platform].[arch].[mode].[ext]'
           releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
