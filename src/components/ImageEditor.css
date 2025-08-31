@@ -151,13 +151,17 @@
 
 .editor-sidebar {
   width: 280px;
+  min-width: 280px;
+  max-width: 280px;
   background: #333;
   border-right: 1px solid #555;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 16px;
+  box-sizing: border-box;
 }
 
 .tool-panel h3,
@@ -320,9 +324,12 @@
 }
 
 .image-list {
-  display: flex;
+  display:flexbox;
   flex-direction: column;
+  gap: 2px;
   max-height: 200px;
+  min-width: auto !important;
+  max-width: auto !important;
   overflow-y: auto;
 }
 
@@ -330,10 +337,16 @@
   background: #444;
   border: 1px solid #666;
   color: #f6f6f6;
+  padding: 6px 8px;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
   text-align: left;
   transition: background-color 0.2s;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .image-item:hover {
@@ -347,19 +360,24 @@
 
 .image-actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   margin-top: 8px;
+  width: 100%;
 }
 
 .image-actions button {
   background: #444;
   border: 1px solid #666;
   color: #f6f6f6;
-  padding: 4px 4px;
+  padding: 6px 8px;
   border-radius: 3px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .image-actions button:hover:not(:disabled) {
